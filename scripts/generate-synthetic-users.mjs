@@ -77,7 +77,7 @@ sql.push('begin;');
 sql.push(`insert into core.users (user_id, date_of_birth, gender, timezone) values\n${values(users.map((u) => [u.id, `${1988 + (u.n % 12)}-${String((u.n % 12) + 1).padStart(2, '0')}-${String((u.n % 25) + 1).padStart(2, '0')}`, u.gender, 'Asia/Kolkata']))}\non conflict (user_id) do nothing;`);
 sql.push(`insert into core.user_contacts (user_id, email, phone_number) values\n${values(users.map((u) => [u.id, `aditya.user${u.code}@example.test`, `+91920000${String(u.n).padStart(4, '0')}`]))}\non conflict (user_id) do update set email = excluded.email, phone_number = excluded.phone_number;`);
 
-const kycUsers = users.filter((u) => u.n <= 20 || (u.n >= 31 && u.n <= 40) || u.n >= 46);
+const kycUsers = users.filter((u) => u.n <= 40 || u.n >= 46);
 for (const type of ['kyc_verification']) {
   sql.push(`insert into core.user_consents (user_id, consent_type, policy_version, decision, source)\nselect v.user_id::uuid, ${q(type)}, 'v1.0', 'granted', 'signup_flow' from (values\n${values(kycUsers.map((u) => [u.id]))}\n) v(user_id) where not exists (select 1 from core.user_consents_current c where c.user_id=v.user_id::uuid and c.consent_type=${q(type)});`);
 }
@@ -101,10 +101,50 @@ for (const u of users) {
   }
 }
 
-sql.push(`insert into core.auth_identities (user_id,provider,provider_subject) values\n${values(users.map((u) => {
-  if (u.n >= 41 && u.n <= 45) return [u.id, u.n % 2 ? 'google' : 'apple', `synthetic-external-${u.code}`];
-  return [u.id, u.n % 2 ? 'email_otp' : 'phone_otp', u.id];
-}))}\non conflict (provider,provider_subject) do nothing;`);
+// Exhaustive failure-code coverage across non-active synthetic users.
+const aadhaarFailureReasons = [
+  'wrong_otp','otp_attempts_exceeded','otp_limit_exceeded','otp_expired','mobile_not_linked','invalid_aadhaar_number',
+  'aadhaar_not_found','aadhaar_inactive','aadhaar_locked','name_mismatch','dob_mismatch','already_used',
+  'user_cancelled','consent_denied','provider_error','too_many_attempts'
+];
+const panFailureReasons = [
+  'invalid_pan_format','pan_not_found','pan_inactive','pan_not_individual','pan_not_linked_to_aadhaar',
+  'name_mismatch','dob_mismatch','aadhaar_pan_name_mismatch','already_used','user_cancelled','consent_denied',
+  'provider_error','too_many_attempts'
+];
+for (let i = 0; i < aadhaarFailureReasons.length; i++) {
+  const u = users[15 + i];
+  const reason = aadhaarFailureReasons[i];
+  sql.push(`update core.user_verifications set email_status='verified',email_verified_at=coalesce(email_verified_at,clock_timestamp()),phone_status='verified',phone_verified_at=coalesce(phone_verified_at,clock_timestamp()),aadhaar_status='failed',aadhaar_failure_reason=${q(reason)},aadhaar_attempt_count=${reason === 'too_many_attempts' ? 3 : 1},aadhaar_verified_at=null,aadhaar_masked=null,age_eligible=null,aadhaar_provider='kyc_vendor',aadhaar_provider_ref=${q(`synthetic-aadhaar-${u.code}`)},aadhaar_hash=null,pan_status='not_started',pan_failure_reason=null,pan_attempt_count=0,pan_verified_at=null,pan_masked=null,pan_provider=null,pan_provider_ref=null,pan_hash=null where user_id=${q(u.id)};`);
+}
+for (let i = 0; i < panFailureReasons.length; i++) {
+  const u = users[15 + i];
+  const reason = panFailureReasons[i];
+  sql.push(`update core.user_verifications set pan_status='failed',pan_failure_reason=${q(reason)},pan_attempt_count=${reason === 'too_many_attempts' ? 3 : 1},pan_verified_at=null,pan_masked=null,pan_provider='kyc_vendor',pan_provider_ref=${q(`synthetic-pan-${u.code}`)},pan_hash=null where user_id=${q(u.id)};`);
+}
+
+// Remaining verification states and conditional result fields.
+const u33 = users[32], u34 = users[33], u35 = users[34], u36 = users[35], u39 = users[38], u40 = users[39], u41 = users[40], u42 = users[41];
+sql.push(`update core.user_verifications set aadhaar_status='review_required',aadhaar_failure_reason='name_mismatch',aadhaar_attempt_count=1,aadhaar_verified_at=null,aadhaar_masked=null,age_eligible=null,aadhaar_provider='kyc_vendor',aadhaar_provider_ref=${q(`synthetic-aadhaar-${u33.code}`)},aadhaar_hash=null,pan_status='not_started',pan_failure_reason=null,pan_attempt_count=0,pan_verified_at=null,pan_masked=null,pan_provider=null,pan_provider_ref=null,pan_hash=null where user_id=${q(u33.id)};`);
+sql.push(`update core.user_verifications set aadhaar_status='verified',aadhaar_failure_reason=null,aadhaar_attempt_count=1,aadhaar_verified_at=coalesce(aadhaar_verified_at,clock_timestamp()),aadhaar_masked=${q(`XXXXXXXX${String(u34.n).padStart(4,'0')}`)},age_eligible=true,aadhaar_provider='digilocker',aadhaar_provider_ref=${q(`synthetic-aadhaar-${u34.code}`)},aadhaar_hash=extensions.digest(${q(`synthetic-aadhaar-${u34.code}`)},'sha256'),pan_status='pending',pan_failure_reason=null,pan_attempt_count=1,pan_verified_at=null,pan_masked=null,pan_provider='protean',pan_provider_ref=${q(`synthetic-pan-${u34.code}`)},pan_hash=null where user_id=${q(u34.id)};`);
+sql.push(`update core.user_verifications set aadhaar_status='verified',aadhaar_failure_reason=null,aadhaar_attempt_count=1,aadhaar_verified_at=coalesce(aadhaar_verified_at,clock_timestamp()),aadhaar_masked=${q(`XXXXXXXX${String(u35.n).padStart(4,'0')}`)},age_eligible=false,aadhaar_provider='digilocker',aadhaar_provider_ref=${q(`synthetic-aadhaar-${u35.code}`)},aadhaar_hash=extensions.digest(${q(`synthetic-aadhaar-${u35.code}`)},'sha256'),pan_status='not_started',pan_failure_reason=null,pan_attempt_count=0,pan_verified_at=null,pan_masked=null,pan_provider=null,pan_provider_ref=null,pan_hash=null where user_id=${q(u35.id)};`);
+sql.push(`update core.user_verifications set aadhaar_status='verified',aadhaar_failure_reason=null,aadhaar_attempt_count=1,aadhaar_verified_at=coalesce(aadhaar_verified_at,clock_timestamp()),aadhaar_masked=${q(`XXXXXXXX${String(u36.n).padStart(4,'0')}`)},age_eligible=true,aadhaar_provider='digilocker',aadhaar_provider_ref=${q(`synthetic-aadhaar-${u36.code}`)},aadhaar_hash=extensions.digest(${q(`synthetic-aadhaar-${u36.code}`)},'sha256'),pan_status='review_required',pan_failure_reason='aadhaar_pan_name_mismatch',pan_attempt_count=1,pan_verified_at=null,pan_masked=null,pan_provider='protean',pan_provider_ref=${q(`synthetic-pan-${u36.code}`)},pan_hash=null where user_id=${q(u36.id)};`);
+sql.push(`update core.user_verifications set email_status='verified',email_verified_at=coalesce(email_verified_at,clock_timestamp()),phone_status='pending',phone_verified_at=null,aadhaar_status='not_started',aadhaar_failure_reason=null,aadhaar_attempt_count=0,aadhaar_verified_at=null,aadhaar_masked=null,age_eligible=null,aadhaar_provider=null,aadhaar_provider_ref=null,aadhaar_hash=null,pan_status='not_started',pan_failure_reason=null,pan_attempt_count=0,pan_verified_at=null,pan_masked=null,pan_provider=null,pan_provider_ref=null,pan_hash=null where user_id=${q(u39.id)};`);
+sql.push(`update core.user_verifications set email_status='verified',email_verified_at=coalesce(email_verified_at,clock_timestamp()),phone_status='failed',phone_verified_at=null,aadhaar_status='not_started',aadhaar_failure_reason=null,aadhaar_attempt_count=0,aadhaar_verified_at=null,aadhaar_masked=null,age_eligible=null,aadhaar_provider=null,aadhaar_provider_ref=null,aadhaar_hash=null,pan_status='not_started',pan_failure_reason=null,pan_attempt_count=0,pan_verified_at=null,pan_masked=null,pan_provider=null,pan_provider_ref=null,pan_hash=null where user_id=${q(u40.id)};`);
+sql.push(`update core.user_verifications set email_status='not_started',email_verified_at=null,phone_status='not_started',phone_verified_at=null where user_id=${q(u41.id)};`);
+sql.push(`update core.user_verifications set email_status='pending',email_verified_at=null,phone_status='not_started',phone_verified_at=null where user_id=${q(u42.id)};`);
+
+sql.push(`insert into core.auth_identities (user_id,provider,provider_subject) values\n${values(users.map((u) => [u.id, u.n % 2 ? 'google' : 'apple', `synthetic-external-${u.code}`]))}\non conflict (provider,provider_subject) do nothing;`);
+sql.push(`insert into core.auth_identities (user_id,provider,provider_subject) values (${q(users[0].id)},'email_otp',${q(users[0].id)}),(${q(users[1].id)},'phone_otp',${q(users[1].id)}) on conflict (provider,provider_subject) do nothing;`);
+
+for (const [n, status, reason] of [[47,'unlinked','user_request'],[48,'revoked','security'],[49,'unlinked','admin_action'],[50,'revoked','provider_revoked']]) {
+  const u = users[n - 1];
+  sql.push(`update core.auth_identities set status=${q(status)},unlinked_at=coalesce(unlinked_at,clock_timestamp()),unlink_reason=${q(reason)},last_login_at=coalesce(last_login_at,linked_at) where user_id=${q(u.id)};`);
+}
+sql.push(`update core.auth_identities set last_login_at=coalesce(last_login_at,linked_at) where status='active' and (provider in ('google','apple') or user_id in (${q(users[0].id)},${q(users[1].id)}));`);
+
+sql.push(`insert into core.user_consents(user_id,consent_type,policy_version,decision,source) select ${q(users[0].id)},'terms_of_service','v1.1','granted','admin_console' where not exists (select 1 from core.user_consents where user_id=${q(users[0].id)} and consent_type='terms_of_service' and policy_version='v1.1');`);
+sql.push(`insert into core.user_consents(user_id,consent_type,policy_version,decision,source) select ${q(users[1].id)},'privacy_notice','v1.1','granted','api' where not exists (select 1 from core.user_consents where user_id=${q(users[1].id)} and consent_type='privacy_notice' and policy_version='v1.1');`);
 
 const purposes = ['signup','login','contact_change','account_recovery'];
 for (const u of users) {
@@ -112,16 +152,27 @@ for (const u of users) {
   const purpose = purposes[(u.n - 1) % purposes.length];
   sql.push(`insert into core.user_otp_challenges(user_id,channel,purpose,destination_hash,contact_version,otp_hmac) select ${q(u.id)},${q(channel)},${q(purpose)},extensions.digest(${q(`destination-${u.code}`)},'sha256'),1,extensions.digest(${q(`otp-${u.code}`)},'sha256') where not exists (select 1 from core.user_otp_challenges where user_id=${q(u.id)} and channel=${q(channel)} and purpose=${q(purpose)});`);
   switch (u.n % 5) {
-    case 2: sql.push(`update core.user_otp_challenges set status='verified',verified_at=clock_timestamp(),attempt_count=1 where user_id=${q(u.id)};`); break;
+    case 2: sql.push(`update core.user_otp_challenges set status='verified',verified_at=coalesce(verified_at,least(clock_timestamp(),expires_at-interval '1 second')),attempt_count=1 where user_id=${q(u.id)};`); break;
     case 3: sql.push(`update core.user_otp_challenges set status='expired',sent_at=clock_timestamp()-interval '20 minutes',last_sent_at=clock_timestamp()-interval '20 minutes',expires_at=clock_timestamp()-interval '10 minutes',verified_at=null where user_id=${q(u.id)};`); break;
     case 4: sql.push(`update core.user_otp_challenges set status='locked',attempt_count=5,verified_at=null where user_id=${q(u.id)};`); break;
     case 0: sql.push(`update core.user_otp_challenges set status='cancelled',verified_at=null where user_id=${q(u.id)};`); break;
   }
 }
+sql.push(`update core.user_otp_challenges set attempt_count=2 where status='expired';`);
+sql.push(`update core.user_otp_challenges set attempt_count=3 where status='cancelled';`);
+sql.push(`update core.user_otp_challenges set attempt_count=4 where status='pending' and id % 2 = 0;`);
 
 sql.push(`do $$ declare u record; begin for u in select user_id from core.users where user_id in (${activatableUsers.map((u) => q(u.id)).join(',')}) and account_status='limited' loop perform core.change_account_status(u.user_id,'active','system',null,'verification_completed'); end loop; end $$;`);
 sql.push(`do $$ declare u record; begin for u in select user_id from core.users where user_id in (${users.filter((u) => u.n >= 46 && u.n <= 48).map((u) => q(u.id)).join(',')}) and account_status='active' loop perform core.change_account_status(u.user_id,'suspended','admin','synthetic-admin','policy_violation',clock_timestamp()+interval '7 days','synthetic-suspension-'||u.user_id::text); end loop; end $$;`);
 sql.push(`do $$ declare u record; begin for u in select user_id from core.users where user_id in (${users.filter((u) => u.n >= 49).map((u) => q(u.id)).join(',')}) and account_status='active' loop perform core.change_account_status(u.user_id,'deactivated','user','synthetic-user','user_request',null,'synthetic-deactivation-'||u.user_id::text); end loop; end $$;`);
+sql.push(`do $$ begin if not exists(select 1 from core.user_status_history where request_id='coverage-verification-reset') then perform core.change_account_status(${q(users[14].id)},'limited','system',null,'verification_reset',null,'coverage-verification-reset'); perform core.change_account_status(${q(users[14].id)},'active','system',null,'verification_completed',null,'coverage-verification-reactivate'); end if; end $$;`);
+sql.push(`do $$ begin if not exists(select 1 from core.user_status_history where request_id='coverage-appeal') then perform core.change_account_status(${q(users[45].id)},'active','admin','synthetic-admin','appeal_accepted',null,'coverage-appeal'); perform core.change_account_status(${q(users[45].id)},'suspended','admin','synthetic-admin','fraud_suspected',clock_timestamp()+interval '7 days','coverage-fraud'); end if; end $$;`);
+sql.push(`do $$ begin if not exists(select 1 from core.user_status_history where request_id='coverage-expiry') then perform core.change_account_status(${q(users[46].id)},'active','system',null,'suspension_expired',null,'coverage-expiry'); perform core.change_account_status(${q(users[46].id)},'suspended','support','synthetic-support','report_upheld',clock_timestamp()+interval '7 days','coverage-report'); end if; end $$;`);
+sql.push(`do $$ begin if not exists(select 1 from core.user_status_history where request_id='coverage-return') then perform core.change_account_status(${q(users[48].id)},'active','user','synthetic-user','user_returned',null,'coverage-return'); perform core.change_account_status(${q(users[48].id)},'deactivated','system',null,'inactivity',null,'coverage-inactivity'); end if; end $$;`);
+sql.push(`do $$ begin if not exists(select 1 from core.user_status_history where request_id='coverage-cancel-delete') then perform core.change_account_status(${q(users[17].id)},'deletion_pending','user','synthetic-user','user_request',clock_timestamp()+interval '30 days','coverage-start-delete'); perform core.change_account_status(${q(users[17].id)},'limited','user','synthetic-user','deletion_cancelled',null,'coverage-cancel-delete'); end if; end $$;`);
+sql.push(`do $$ begin if (select account_status from core.users where user_id=${q(users[18].id)})='limited' then perform core.change_account_status(${q(users[18].id)},'deletion_pending','admin','synthetic-admin','legal_request',clock_timestamp()+interval '30 days','coverage-legal-delete'); end if; end $$;`);
+sql.push(`do $$ begin if (select account_status from core.users where user_id=${q(users[19].id)})='limited' then perform core.change_account_status(${q(users[19].id)},'deletion_pending','user','synthetic-user','user_request',clock_timestamp()+interval '1 second','coverage-delete'); perform core.change_account_status(${q(users[19].id)},'deleted','system',null,'grace_period_ended',null,'coverage-deleted'); end if; end $$;`);
+sql.push(`do $$ begin if (select account_status from core.users where user_id=${q(u35.id)})='limited' then perform core.change_account_status(${q(u35.id)},'suspended','support','synthetic-support','age_ineligible',clock_timestamp()+interval '30 days','coverage-age'); end if; end $$;`);
 sql.push('commit;');
 sql.push('');
 

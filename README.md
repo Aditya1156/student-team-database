@@ -12,6 +12,8 @@ Current deployed scope:
 
 Only Aditya's seven identity tables contain synthetic test data: 50 fictional users covering production-style onboarding, verification, consent, OTP, authentication, suspension, and deactivation states. Every other module remains empty. Never load real Aadhaar, PAN, phone, email, message, or moderation data into this review project.
 
+The fixture covers every account, overall-verification, contact-verification, Aadhaar-verification, PAN-verification, OTP status, OTP purpose, authentication provider/status, consent type/decision/source, gender, lifecycle actor, lifecycle reason, Aadhaar failure reason, and PAN failure reason allowed by Aditya's current constraints. State-dependent nulls are intentional and required.
+
 For this fixed review dataset, the internal numeric identity columns have been normalized to start at 1. Production logic must still use UUID `user_id` and must not assume numeric identities are continuous; PostgreSQL sequences can legitimately contain gaps after failures, rollbacks, or deletions.
 
 ## Team workflow

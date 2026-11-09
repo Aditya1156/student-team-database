@@ -21,10 +21,32 @@ begin
   if (select count(distinct gender) from core.users) <> 10 then
     raise exception 'Gender value coverage mismatch';
   end if;
-  if (select count(*) from core.users where account_status = 'active') <> 15
-     or (select count(*) from core.users where account_status = 'suspended') <> 3
-     or (select count(*) from core.users where account_status = 'deactivated') <> 2 then
-    raise exception 'Account lifecycle scenario mismatch';
+  if (select count(distinct account_status) from core.users) <> 6
+     or (select count(distinct verification_status) from core.users) <> 4 then
+    raise exception 'Account or verification state coverage mismatch';
+  end if;
+  if (select count(distinct email_status) from core.user_verifications) <> 4
+     or (select count(distinct phone_status) from core.user_verifications) <> 4
+     or (select count(distinct aadhaar_status) from core.user_verifications) <> 5
+     or (select count(distinct pan_status) from core.user_verifications) <> 5 then
+    raise exception 'Verification step coverage mismatch';
+  end if;
+  if (select count(distinct provider) from core.auth_identities) <> 4
+     or (select count(distinct status) from core.auth_identities) <> 3
+     or (select count(distinct status) from core.user_otp_challenges) <> 5
+     or (select count(distinct purpose) from core.user_otp_challenges) <> 4 then
+    raise exception 'Identity provider or OTP coverage mismatch';
+  end if;
+  if (select count(distinct consent_type) from core.user_consents) <> 4
+     or (select count(distinct decision) from core.user_consents) <> 3
+     or (select count(distinct source) from core.user_consents) <> 4
+     or (select count(distinct actor_type) from core.user_status_history) <> 4
+     or (select count(distinct reason_code) from core.user_status_history) <> 15 then
+    raise exception 'Consent or lifecycle-history coverage mismatch';
+  end if;
+  if (select count(distinct aadhaar_failure_reason) from core.user_verifications where aadhaar_failure_reason is not null) <> 16
+     or (select count(distinct pan_failure_reason) from core.user_verifications where pan_failure_reason is not null) <> 13 then
+    raise exception 'KYC failure-reason coverage mismatch';
   end if;
   for r in
     select schemaname, tablename from pg_catalog.pg_tables
