@@ -6,6 +6,7 @@
   "scripts": {
     "seed:generate": "node scripts/generate-seed.mjs",
     "seed:synthetic": "node scripts/generate-synthetic-users.mjs",
+    "seed:team": "node scripts/generate-full-team-review.mjs",
     "db:lint": "supabase db lint --remote --level warning",
     "test": "supabase db lint --remote --level warning"
   },
