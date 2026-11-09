@@ -38,9 +38,29 @@ begin
   end loop;
 end $$;
 '@
+$sequenceRepair = @'
+do $$
+declare
+  v_table text;
+  v_max bigint;
+begin
+  foreach v_table in array array[
+    'users','auth_identities','user_contacts','user_verifications',
+    'user_otp_challenges','user_consents','user_status_history'
+  ]
+  loop
+    execute format('select max(id) from core.%I', v_table) into v_max;
+    if v_max is null then
+      execute format('select pg_catalog.setval(pg_catalog.pg_get_serial_sequence(''core.%I'',''id''),1,false)', v_table);
+    else
+      execute format('select pg_catalog.setval(pg_catalog.pg_get_serial_sequence(''core.%I'',''id''),%s,true)', v_table, v_max);
+    end if;
+  end loop;
+end $$;
+'@
 [System.IO.File]::WriteAllText(
   $validationFile,
-  'begin;' + [Environment]::NewLine + $body + [Environment]::NewLine + $assertion + [Environment]::NewLine + 'rollback;',
+  'begin;' + [Environment]::NewLine + $body + [Environment]::NewLine + $assertion + [Environment]::NewLine + 'rollback;' + [Environment]::NewLine + $sequenceRepair,
   [System.Text.UTF8Encoding]::new($false)
 )
 try {

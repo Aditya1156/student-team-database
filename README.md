@@ -12,6 +12,8 @@ Current deployed scope:
 
 Only Aditya's seven identity tables contain synthetic test data: 50 fictional users covering production-style onboarding, verification, consent, OTP, authentication, suspension, and deactivation states. Every other module remains empty. Never load real Aadhaar, PAN, phone, email, message, or moderation data into this review project.
 
+For this fixed review dataset, the internal numeric identity columns have been normalized to start at 1. Production logic must still use UUID `user_id` and must not assume numeric identities are continuous; PostgreSQL sequences can legitimately contain gaps after failures, rollbacks, or deletions.
+
 ## Team workflow
 
 The lead owns the deployed design. Teammates review the synthetic views and propose changes through GitHub. Never edit tables directly in the Supabase dashboard and never rewrite a deployed migration; add a new migration.
