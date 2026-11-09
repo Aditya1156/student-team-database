@@ -8,7 +8,7 @@ $seed = ($seedLines | Where-Object { $_ -notmatch '^\s*(begin|commit);\s*$' }) -
 $assertion = @'
 do $$
 begin
-  if (select count(*) from core.profiles where handle like '%_demo') <> 8 then
+  if (select count(*) from core.profiles where handle like 'demo_user_%') <> 50 then
     raise exception 'Synthetic profile count mismatch';
   end if;
   if exists (select 1 from core.users where user_id::text like '00000000-0000-4000-8000-00000000000%') then

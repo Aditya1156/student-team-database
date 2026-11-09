@@ -7,7 +7,7 @@ $body = ($sourceLines | Where-Object { $_ -notmatch '^\s*(begin|commit);\s*$' })
 $assertion = @'
 do $$
 begin
-  if (select count(*) from core.profiles where handle like '%_demo') <> 8 then
+  if (select count(*) from core.profiles where handle like 'demo_user_%') <> 50 then
     raise exception 'Synthetic profile count mismatch';
   end if;
   if not exists (select 1 from core.messages where client_message_id = 'synthetic-message-001') then
