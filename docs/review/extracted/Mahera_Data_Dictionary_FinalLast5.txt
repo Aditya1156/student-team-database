@@ -1,0 +1,406 @@
+﻿SOURCE: Mahera_Data_Dictionary_FinalLast5.xlsx
+
+SHEET: Read Me [state=]
+A1=Data Dictionary - Mahera Muskan (4 tables)
+A2=Schema: core - prepared 06 Nov 2026 from 'Mahera_Data_Dictionary_FinalLast3.xlsx' with the 05 Nov 2026 DB review fixes applied
+A4=What this is | B4=Every table, column and allowed value of Mahera Muskan's 4 tables (as per team allocation): notification_category_preferences, device_tokens, connections, relations. Other members' tables are not included.
+A5=YELLOW rows | B5=New or modified compared with the original workbook. The 'Change' column says exactly what changed. Removed items are listed in 'What Changed'.
+A6=How to read it | B6=Tables -> Data Dictionary (every column) -> Value Lists (table > column > values) -> Relationships.
+A7=Link to users | B7=Every user reference is <column> UUID REFERENCES core.users(user_id) ON DELETE RESTRICT. core.users belongs to the identity team.
+A8=Common rules | B8=ON DELETE RESTRICT everywhere. Columns, types and rules come from the reviewed data dictionary; status lists are named CHECKs. Dropped values are in Values Not Kept. Three supporting registry tables (notification_categories, notification_category_channels, connection_closed_reasons) hold the controlled values.
+A9=Key words | B9=PK = primary key. FK = link to another table. UNIQUE = no duplicates. CHECK = rule the database enforces.
+
+SHEET: What Changed [state=]
+A1=What changed from the original workbook
+A2=Review fixes applied in this dictionary.
+A4=Type | B4=Item | C4=What changed
+A5=Scope | B5=Mahera's 4 tables only | C5=notification_category_preferences, device_tokens, connections, relations (team allocation). Reviewed against the DB review comments of 05 Nov 2026.
+A6=Added | B6=Review-fix columns | C6=preferences: id (PK), priority_level, preferred_notification_period, snoozed_from, snoozed_until. device_tokens: token_nonce, token_key_version, token_fingerprint, expires_at, invalidated_at. connections: connection_source, closed_by_type, last_interaction_at, interaction_count. relations: relation_source, is_mutual, non_mutual_reason, expires_at.
+A7=Added | B7=Supporting registry tables (3) | C7=core.notification_categories, core.notification_category_channels, core.connection_closed_reasons - hold the controlled values and allowed combinations (see Relationships).
+A8=Modified | B8=All user columns (7) | C8=UUID, FK -> core.users(user_id) ON DELETE RESTRICT.
+A9=Modified | B9=notification categories | C9=~60 labels -> 38 stable codes in a registry. 8 mandatory notices cannot be disabled; newsletter_marketing needs consent. Missing preference row = enabled.
+A10=Modified | B10=notification channels | C10=in_app, push, email only (sms, whatsapp not kept); only allowed channel/category pairs can be stored.
+A11=Modified | B11=quiet hours | C11=Not kept here - held in another team member's table. This table keeps only snoozed_from / snoozed_until.
+A12=Modified | B12=device_tokens | C12=Providers apns, fcm, webpush, wns; new platform column with verified provider/platform pairs; token_hash -> token_fingerprint (HMAC-SHA-256); AES-256-GCM only, with nonce + key version; Web Push stored as an encrypted subscription.
+A13=Modified | B13=connections.status | C13=10 values -> active, paused, closed. Request stages stay in core.connection_requests.
+A14=Modified | B14=connections.closed_reason | C14=48 values -> 41 governed codes (19 from the review + 22 proposed, need approval), each tied to an actor type; block direction via closed_by_user_id.
+A15=Modified | B15=relations | C15=Duplicate active actions blocked; relation_source and non_mutual_reason limited to approved codes; expiry added.
+A16=Added | B16=relations.reaction_type | C16=From her sheet - like, wave, endorse, react (needs product approval; 'save' not kept).
+A17=Not included | B17=connections 'restricted', reaction 'save' | C17=See 'Values Not Kept'. connection_source / relation_source extra values are listed for reference only.
+
+SHEET: Tables [state=]
+A1=Tables overview
+A2=Mahera's 4 tables. 'Columns' counted live from the Data Dictionary sheet. Three supporting registry tables (see Relationships) hold the controlled values.
+A4=# | B4=Table | C4=What it stores | D4=One row means | E4=Columns | F4=Change
+A5=1 | B5=core.notification_category_preferences | C5=Which notification categories a user wants, per channel. | D5=One row per user + channel + category | E5=10 | F5=Modified: labels -> 38 stable codes; channels in_app/push/email; mandatory notices cannot be switched off; snooze columns (quiet hours are in another table)
+A6=2 | B6=core.device_tokens | C6=Push-notification tokens of a user's devices (stored as keyed fingerprint + AES-256-GCM encrypted copy). | D6=One row per device token | E6=13 | F6=Modified: providers + platform; token_fingerprint (HMAC) + AES-256-GCM with nonce and key version; Web Push as encrypted subscription
+A7=3 | B7=core.connections | C7=An accepted connection between two users (canonical pair: low id, high id). | D7=One row per connection episode | E7=13 | F7=Modified: 3 states; 41 governed closed reasons with actor type; source, interaction columns added
+A8=4 | B8=core.relations | C8='Relate' to another user's profile prompt answer. | D8=One row per relate action | E8=13 | F8=Modified: reaction_type, source, mutual columns and expiry added; duplicate active actions blocked
+D9=Total columns | E9=49
+
+SHEET: Data Dictionary [state=]
+A1=Data dictionary - every column
+A2=Filter by Table. Yellow = new or modified.
+A4=Table | B4=# | C4=Column | D4=Data type | E4=Required | F4=Default | G4=Key | H4=Possible values | I4=Meaning | J4=Example | K4=Rules | L4=Change
+A5=core.notification_category_preferences | B5=1 | C5=id | D5=BIGINT identity | E5=Yes | F5=auto | G5=PK | H5=1, 2, 3 ... | I5=Unique preference row ID. | J5=1 | K5=Generated always; never supplied by the client. | L5=New: row ID + primary key (review fix)
+A6=core.notification_category_preferences | B6=2 | C6=user_id | D6=UUID | E6=Yes | G6=FK | H6=FK -> core.users(user_id) ON DELETE RESTRICT | I6=User whose preference is stored. | J6=fcba728f-... | K6=Canonical user key. Part of UNIQUE (user_id, channel, category); INDEX on user_id. | L6=Modified: UUID -> core.users(user_id); UNIQUE added
+A7=core.notification_category_preferences | B7=3 | C7=channel | D7=VARCHAR(20) | E7=Yes | G7=UNIQUE part | H7=in_app, push, email | I7=Delivery channel. | J7=push | K7=CHECK in (in_app, push, email); sms / whatsapp / unknown rejected. channel + category must be an allowed pair (registry). | L7=Modified: sms, whatsapp not kept; allowed pairs enforced
+A8=core.notification_category_preferences | B8=4 | C8=category | D8=VARCHAR(40) | E8=Yes | G8=UNIQUE part, FK (registry) | H8=38 codes - see Value Lists | I8=Notification category. | J8=direct_message | K8=Immutable category_code from the notification-category registry. Only active codes and supported channel/category pairs; unknown or deprecated rejected. Labels are kept separately. | L8=Modified: labels -> stable codes; registry added
+A9=core.notification_category_preferences | B9=5 | C9=enabled | D9=BOOLEAN | E9=Yes | F9=TRUE | H9=true, false | I9=Category on or off for this channel. | J9=true | K9=Missing row = enabled (same as the default). Mandatory categories cannot be switched off. newsletter_marketing needs granted consent in core.user_consents; without it, it is not sent. | L9=Modified: missing-row default + mandatory / consent rules
+A10=core.notification_category_preferences | B10=6 | C10=priority_level | D10=TEXT | E10=Yes | F10='normal' | H10=critical, high, normal, low (proposed) | I10=Urgency the user wants for this category / channel. | J10=normal | K10=Priority is governed by the category registry; a user setting can never downgrade critical security events. Values need approval. | L10=New: from her sheet; registry priority wins
+A11=core.notification_category_preferences | B11=7 | C11=preferred_notification_period | D11=TEXT | E11=No | F11=NULL | H11=anytime, morning, afternoon, evening (proposed) | I11=Preferred time window for notifications. | J11=morning | K11=NULL = no preference. Quiet hours and active snooze take precedence; uses the user's timezone. Values / time ranges need approval. | L11=New: from her sheet; values need approval
+A12=core.notification_category_preferences | B12=8 | C12=snoozed_from | D12=TIMESTAMPTZ | E12=No | F12=NULL | H12=Date and time; NULL = no snooze | I12=Start of the snooze for this user + channel + category. | J12=2026-11-06 22:00+05:30 | K12=Must be earlier than snoozed_until. Mandatory security / account notices cannot be snoozed. | L12=New: per-row snooze (quiet hours are in another table)
+A13=core.notification_category_preferences | B13=9 | C13=snoozed_until | D13=TIMESTAMPTZ | E13=No | F13=NULL | H13=Date and time; NULL = no snooze | I13=End of the snooze. | J13=2026-11-07 07:00+05:30 | K13=Later than snoozed_from. An expired snooze is ignored and cleared automatically; applies only to this user / channel / category. | L13=New: per-row snooze
+A14=core.notification_category_preferences | B14=10 | C14=updated_at | D14=TIMESTAMPTZ | E14=Yes | F14=NOW() | H14=Date and time | I14=When the preference changed. | J14=2026-11-06 10:00+05:30 | K14=Set by trigger on every change (UTC). Admin changes are recorded in the audit trail.
+A15=core.device_tokens | B15=1 | C15=id | D15=BIGINT identity | E15=Yes | F15=auto | G15=PK | H15=1, 2, 3 ... | I15=Token row ID. | J15=1 | K15=Generated always.
+A16=core.device_tokens | B16=2 | C16=user_id | D16=UUID | E16=Yes | G16=FK | H16=FK -> core.users(user_id) ON DELETE RESTRICT | I16=Owner of the device. | J16=fcba728f-... | K16=Authorization checks ownership on every access. | L16=Modified: UUID -> core.users(user_id)
+A17=core.device_tokens | B17=3 | C17=provider | D17=VARCHAR(20) | E17=Yes | H17=apns, fcm, webpush, wns | I17=Push service that delivers to the device. | J17=fcm | K17=Validated together with platform (named CHECK). Web Push subscriptions are stored encrypted. | L17=Modified: webpush, wns added
+A18=core.device_tokens | B18=4 | C18=platform | D18=VARCHAR(20) | E18=Yes | H18=android, ios, ipados, macos, windows, linux, web | I18=Device operating system / client. | J18=android | K18=Only verified provider / platform pairs: apns -> ios, ipados, macos; fcm -> android; wns -> windows; webpush -> web. Linux stays disabled until verified. | L18=New column (from her research)
+A19=core.device_tokens | B19=5 | C19=token_ciphertext | D19=BYTEA | E19=Yes | H19=AES-256-GCM ciphertext (+ auth tag) | I19=Encrypted raw token, needed to send pushes. | J19=\x01ab... | K19=AES-256-GCM only; key in Vault / KMS; never log plaintext. No AES-CTR, no CBC without MAC, no RSA for the token. Web Push: the whole subscription (endpoint, p256dh, auth) is stored here as encrypted JSON. | L19=Modified: AES-256-GCM approved; Web Push handling
+A20=core.device_tokens | B20=6 | C20=token_nonce | D20=BYTEA | E20=Yes | G20=UNIQUE with key version | H20=12 bytes | I20=Nonce used for the AES-256-GCM encryption. | J20=\x5f3a... | K20=Made by the vetted library; never reused with the same key. UNIQUE (token_key_version, token_nonce); CHECK length = 12. | L20=New (review fix)
+A21=core.device_tokens | B21=7 | C21=token_key_version | D21=TEXT | E21=Yes | F21=active KMS key version | H21=Key version id | I21=KMS / Vault key version used to encrypt this token. | J21=kms-key-v3 | K21=Supports key rotation. Key material is never stored in the database; only the push sender may decrypt. | L21=New (review fix)
+A22=core.device_tokens | B22=8 | C22=token_fingerprint | D22=BYTEA | E22=Yes | G22=UNIQUE (active tokens) | H22=32-byte HMAC-SHA-256 | I22=Keyed fingerprint used to find / de-duplicate a token without decrypting it. | J22=\x9c41... | K22=HMAC key kept in Vault / KMS, separate from the encryption key. UNIQUE (provider, token_fingerprint) WHERE status = 'active'. For Web Push it is computed from the endpoint. Same token from another user: the old row is revoked in the same transaction. | L22=New: replaces token_hash (review fix)
+A23=core.device_tokens | B23=9 | C23=status | D23=VARCHAR(20) | E23=Yes | F23='active' | H23=active, revoked, invalid, expired | I23=Token state. | J23=active | K23=Named CHECK. Revoke on logout; invalid when the provider rejects it permanently. Revoked, invalid and expired tokens are never sent. revoked_at, invalidated_at and expires_at must agree with status. | L23=Modified: expired added; timestamp consistency
+A24=core.device_tokens | B24=10 | C24=created_at | D24=TIMESTAMPTZ | E24=Yes | F24=NOW() | H24=Date and time | I24=When registered. | J24=2026-11-06 10:00+05:30 | K24=Server-generated, UTC.
+A25=core.device_tokens | B25=11 | C25=expires_at | D25=TIMESTAMPTZ | E25=No | F25=NULL | H25=Date and time; NULL if unknown | I25=When the token expires, if known. | J25=2027-02-04 10:00+05:30 | K25=Later than created_at. Expired tokens are not sent. 90-day purge is proposed, not approved. | L25=New (review fix)
+A26=core.device_tokens | B26=12 | C26=revoked_at | D26=TIMESTAMPTZ | E26=No | F26=NULL | H26=Date and time; NULL unless revoked | I26=When revoked (logout / device removed). | K26=Filled exactly when status = 'revoked'; >= created_at; updated with status in one step. | L26=Modified: only for status = revoked
+A27=core.device_tokens | B27=13 | C27=invalidated_at | D27=TIMESTAMPTZ | E27=No | F27=NULL | H27=Date and time; NULL unless invalid | I27=When the provider permanently rejected the token. | K27=Filled exactly when status = 'invalid'; set atomically and retries stop. Temporary errors use bounded exponential backoff and never invalidate. | L27=New (review fix)
+A28=core.connections | B28=1 | C28=id | D28=BIGINT identity | E28=Yes | F28=auto | G28=PK | H28=1, 2, 3 ... | I28=Connection ID (one connection episode). | J28=12 | K28=Generated always.
+A29=core.connections | B29=2 | C29=user_low_id | D29=UUID | E29=Yes | G29=FK | H29=FK -> core.users(user_id) ON DELETE RESTRICT | I29=Lower UUID of the pair. | J29=1b2c... | K29=CHECK user_low_id < user_high_id (also blocks self-pairs). INDEX on both ids. | L29=Modified: UUID -> core.users(user_id)
+A30=core.connections | B30=3 | C30=user_high_id | D30=UUID | E30=Yes | G30=FK | H30=FK -> core.users(user_id) ON DELETE RESTRICT | I30=Higher UUID of the pair. | J30=9f8e... | K30=One open (active / paused) connection per pair (partial UNIQUE); closed ones keep history. | L30=Modified: UUID -> core.users(user_id)
+A31=core.connections | B31=4 | C31=status | D31=VARCHAR(20) | E31=Yes | F31='active' | H31=active, paused, closed | I31=Connection state. | J31=active | K31=Named CHECK. Request stages live in Prajwal's core.connection_requests; muted / archived are per-user view settings. 'restricted' needs moderation approval - not included. | L31=Modified: 3 connection states (was 10)
+A32=core.connections | B32=5 | C32=created_from_request_id | D32=BIGINT (same as connection_requests.id) | E32=No | F32=NULL | G32=FK, UNIQUE | H32=FK -> core.connection_requests(id) ON DELETE RESTRICT | I32=Request that created this connection. | J32=34 | K32=UNIQUE when not NULL (one connection per request). Create the connection and consume the request in one transaction so retries cannot duplicate. | L32=Modified: one connection per request (review fix)
+A33=core.connections | B33=6 | C33=connection_source | D33=VARCHAR(30) | E33=Yes | H33=profile, search, mutual_connections, suggestions, events | I33=Where the connection started. | J33=search | K33=5 approved values, same list as core.connection_requests. Other values in Value Lists are reference only. | L33=New column
+A34=core.connections | B34=7 | C34=created_at | D34=TIMESTAMPTZ | E34=Yes | F34=NOW() | H34=Date and time | I34=When connected. | J34=2026-11-06 10:00+05:30 | K34=Server-generated, UTC.
+A35=core.connections | B35=8 | C35=closed_at | D35=TIMESTAMPTZ | E35=No | F35=NULL | H35=Date and time; NULL while open | I35=When the connection ended. | K35=Filled exactly when status = 'closed'; >= created_at; updated with status in one step. | L35=Modified: tied to status = closed
+A36=core.connections | B36=9 | C36=closed_reason | D36=VARCHAR(40) | E36=No | F36=NULL | G36=FK (registry) | H36=41 codes - see Value Lists | I36=Why it ended. | J36=user_removed | K36=Registry-controlled and must match closed_by_type. Required when closed. Internal moderation / security reasons are never shown to the other user. Block direction = closed_by_user_id. | L36=Modified: 41 registry codes (22 proposed, need approval)
+A37=core.connections | B37=10 | C37=closed_by_type | D37=TEXT | E37=No | F37=NULL | G37=FK (registry) | H37=user, admin, system | I37=Who closed it. | J37=user | K37=Required when closed. Admin / system actors are explicit - never arbitrary user IDs. | L37=New (review fix)
+A38=core.connections | B38=11 | C38=closed_by_user_id | D38=UUID | E38=No | F38=NULL | G38=FK | H38=FK -> core.users(user_id) ON DELETE RESTRICT | I38=User who disconnected / blocked (if a user did). | J38=1b2c... | K38=Must be user_low_id or user_high_id when closed_by_type = 'user'; NULL for admin / system. Replaces her blocked_by_user_low / high. | L38=Modified: UUID + replaces blocked_by_user_low/high
+A39=core.connections | B39=12 | C39=last_interaction_at | D39=TIMESTAMPTZ | E39=No | F39=NULL | H39=Date and time | I39=Latest qualifying interaction. | J39=2026-11-06 11:00+05:30 | K39=Updated in the same transaction as the message event; never moves backwards. Reconcile against message events. | L39=New (review fix)
+A40=core.connections | B40=13 | C40=interaction_count | D40=BIGINT | E40=Yes | F40=0 | H40=0, 1, 2 ... | I40=Number of qualifying interactions. | J40=15 | K40=CHECK >= 0. Increment atomically (no lost updates). Reconcile against message events. | L40=New (review fix)
+A41=core.relations | B41=1 | C41=id | D41=BIGINT identity | E41=Yes | F41=auto | G41=PK | H41=1, 2, 3 ... | I41=Relation ID. | J41=1 | K41=Generated always.
+A42=core.relations | B42=2 | C42=actor_user_id | D42=UUID | E42=Yes | G42=FK | H42=FK -> core.users(user_id) ON DELETE RESTRICT | I42=User who relates. | J42=fcba728f-... | K42=CHECK actor_user_id <> target_user_id. Must equal the authenticated user - never trust a client-supplied value. | L42=Modified: UUID -> core.users(user_id)
+A43=core.relations | B43=3 | C43=target_user_id | D43=UUID | E43=Yes | G43=FK | H43=FK -> core.users(user_id) ON DELETE RESTRICT | I43=Owner of the prompt answer. | J43=6be8fb9a-... | K43=Target must pass visibility, eligibility and block / safety checks. | L43=Modified: UUID -> core.users(user_id)
+A44=core.relations | B44=4 | C44=profile_prompt_id | D44=BIGINT (same as profile_prompts.id) | E44=No | F44=NULL | G44=FK (composite) | H44=FK -> core.profile_prompts(id) (Thanushree) | I44=Prompt answer being related to. | J44=7 | K44=NULL when the action is not prompt-specific. Composite FK (profile_prompt_id, target_user_id) so the prompt belongs to the target; needs UNIQUE (id, user_id) on profile_prompts. | L44=Modified: nullable + ownership check
+A45=core.relations | B45=5 | C45=relation_source | D45=VARCHAR(30) | E45=Yes | H45=5 approved values - see Value Lists | I45=Where the action started. | J45=profile | K45=CHECK on the 5 approved values; unknown rejected. Other values in Value Lists are reference only. | L45=New column
+A46=core.relations | B46=6 | C46=reaction_type | D46=VARCHAR(20) | E46=Yes | F46='like' | G46=UNIQUE (active) | H46=like, wave, endorse, react | I46=Kind of relate action. | J46=wave | K46=Needs product approval ('save' not kept). Partial UNIQUE (actor_user_id, target_user_id, reaction_type, COALESCE(profile_prompt_id, 0)) WHERE status = 'active' stops duplicate active actions. | L46=New column (needs approval); 'save' not kept
+A47=core.relations | B47=7 | C47=status | D47=VARCHAR(20) | E47=Yes | F47='active' | H47=active, undone, hidden, expired | I47=Lifecycle. | J47=active | K47=Named CHECK. Expiry and undo are idempotent; an undo wins only before expires_at. | L47=Modified: lifecycle rules added
+A48=core.relations | B48=8 | C48=is_mutual | D48=BOOLEAN | E48=Yes | F48=FALSE | H48=true, false | I48=Both users have qualifying actions toward each other. | J48=false | K48=Prefer deriving it from reciprocal eligible actions. If stored, update transactionally; TRUE only when both directions qualify. | L48=New (review: prefer derived)
+A49=core.relations | B49=9 | C49=non_mutual_reason | D49=VARCHAR(40) | E49=No | F49=NULL | H49=7 codes - see Value Lists | I49=Main reason the relation is not mutual. | J49=awaiting_reciprocal_action | K49=NULL when is_mutual = TRUE; one reason (by precedence) when FALSE. Delivery or sync failures are never reasons. | L49=New
+A50=core.relations | B50=10 | C50=idempotency_key | D50=VARCHAR(255) | E50=No | F50=NULL | G50=UNIQUE with actor_user_id | H50=Key or NULL | I50=Stops duplicates on retry. | J50=rel-7f3a | K50=Same key + same payload returns the original result; same key + different payload is rejected. Client / operation scope and retention still to be defined. | L50=Modified: scope rules (review fix)
+A51=core.relations | B51=11 | C51=created_at | D51=TIMESTAMPTZ | E51=Yes | F51=NOW() | H51=Date and time | I51=When created. | J51=2026-11-06 10:00+05:30 | K51=Server-generated, UTC.
+A52=core.relations | B52=12 | C52=expires_at | D52=TIMESTAMPTZ | E52=No | F52=NULL | H52=Date and time; NULL = no expiry | I52=When the action expires. | J52=2026-11-13 10:00+05:30 | K52=Later than created_at. core.expire_relations() sets status = 'expired' (idempotent). | L52=New (review fix)
+A53=core.relations | B53=13 | C53=undone_at | D53=TIMESTAMPTZ | E53=No | F53=NULL | H53=Date and time; NULL if not undone | I53=When undone. | K53=Filled exactly when status = 'undone'; >= created_at.
+
+SHEET: Value Lists [state=]
+A1=Value lists - table > column > allowed values
+A2=Each table (dark band) lists all its columns; under each column its allowed values or its format. Use + / - on the left to fold.
+A4=# | B4=Column | C4=Value / format | D4=Meaning | E4=When / notes | F4=Change
+A5=core.notification_category_preferences   |   10 columns (4 with fixed values) | F5=Modified
+A6=1 | B6=id | C6=BIGINT identity  |  required | D6=Unique preference row ID. | E6=Free format | F6=New: row ID + primary key (review fix)
+B7=↳ | C7=1, 2, 3 ... | D7=Example: 1 | E7=Generated always; never supplied by the client.
+A8=2 | B8=user_id | C8=UUID  |  required | D8=User whose preference is stored. | E8=Free format | F8=Modified: UUID -> core.users(user_id); UNIQUE added
+B9=↳ | C9=FK -> core.users(user_id) ON DELETE RESTRICT | D9=Example: fcba728f-... | E9=Canonical user key. Part of UNIQUE (user_id, channel, category); INDEX on user_id.
+A10=3 | B10=channel | C10=VARCHAR(20)  |  required | D10=Delivery channel. | E10=3 allowed values | F10=Modified: sms, whatsapp not kept; allowed pairs enforced
+B11=↳ | C11=in_app | D11=Inside the app.
+B12=↳ | C12=push | D12=Phone / desktop push.
+B13=↳ | C13=email | D13=Email. | E13=Only if email is an MVP channel
+A14=4 | B14=category | C14=VARCHAR(40)  |  required | D14=Notification category. | E14=38 allowed values | F14=Modified: labels -> stable codes; registry added
+B15=↳ | C15=direct_message | D15=Notifications about new direct messages received. | E15=Optional; channels: in_app, push | F15=Modified: label -> code
+B16=↳ | C16=connection_request | D16=Alerts when someone sends a connection request. | E16=Optional; channels: in_app, push | F16=Modified: label -> code
+B17=↳ | C17=connection_request_accepted | D17=Alerts when a sent connection request is accepted. | E17=Optional; channels: in_app, push | F17=Modified: label -> code
+B18=↳ | C18=connection_status_changed | D18=Updates when the status of a connection changes. | E18=Optional; channels: in_app | F18=Modified: label -> code
+B19=↳ | C19=like_or_reaction | D19=Alerts when someone likes or reacts to the user's profile or content. | E19=Optional; channels: in_app | F19=Modified: label -> code
+B20=↳ | C20=comment_or_reply | D20=Alerts when someone comments or replies to the user's content. | E20=Optional; channels: in_app, push | F20=Modified: label -> code
+B21=↳ | C21=mention_or_tag | D21=Alerts when the user is mentioned or tagged. | E21=Optional; channels: in_app, push | F21=Modified: label -> code
+B22=↳ | C22=profile_view | D22=Alerts when someone views the user's profile. | E22=Optional; channels: in_app | F22=Modified: label -> code
+B23=↳ | C23=profile_suggestion | D23=Suggested profiles or people the user may want to connect with. | E23=Optional; channels: in_app | F23=Modified: label -> code
+B24=↳ | C24=group_community_activity | D24=Updates about activity in groups or communities the user belongs to. | E24=Optional; channels: in_app | F24=Modified: label -> code
+B25=↳ | C25=event_invitation_or_update | D25=Invitations, changes and updates related to events. | E25=Optional; channels: in_app | F25=Modified: label -> code
+B26=↳ | C26=content_recommendation | D26=Suggested content that may be relevant to the user. | E26=Optional; channels: in_app | F26=Modified: label -> code
+B27=↳ | C27=profile_completion_prompt | D27=Reminders encouraging the user to complete their profile. | E27=Optional; channels: in_app | F27=Modified: label -> code
+B28=↳ | C28=support_response | D28=Replies or updates from the support team. | E28=Optional; channels: in_app | F28=Modified: label -> code
+B29=↳ | C29=product_feature_announcement | D29=Announcements about new products, features or improvements. | E29=Optional; channels: in_app, email | F29=Modified: label -> code
+B30=↳ | C30=event_reminder | D30=Reminder before an upcoming event. | E30=Optional; channels: push | F30=Modified: label -> code
+B31=↳ | C31=scheduled_activity_reminder | D31=Reminder for a scheduled activity. | E31=Optional; channels: push | F31=Modified: label -> code
+B32=↳ | C32=security_suspicious_login | D32=Alert about security events or suspicious login activity. | E32=Mandatory - cannot be switched off; channels: push | F32=Modified: label -> code + mandatory
+B33=↳ | C33=account_status_alert | D33=Alert about an important change to account status. | E33=Mandatory - cannot be switched off; channels: push | F33=Modified: label -> code + mandatory
+B34=↳ | C34=service_disruption | D34=Alert about a service outage or disruption. | E34=Optional; channels: push | F34=Modified: label -> code
+B35=↳ | C35=urgent_support_update | D35=Push alert for an urgent support case update. | E35=Optional; channels: push | F35=Modified: label -> code
+B36=↳ | C36=appointment_event_time_change | D36=Alert when an appointment or event time changes. | E36=Optional; channels: push | F36=Modified: label -> code
+B37=↳ | C37=account_access_restriction | D37=Alert that account access has been locked or restricted. | E37=Mandatory - cannot be switched off; channels: push | F37=Modified: label -> code + mandatory
+B38=↳ | C38=critical_security_alert | D38=High-priority alert about a critical security event. | E38=Mandatory - cannot be switched off; channels: push | F38=Modified: label -> code + mandatory
+B39=↳ | C39=critical_support_update | D39=High-priority update about a critical support issue. | E39=Optional; channels: push | F39=Modified: label -> code
+B40=↳ | C40=welcome_account_setup | D40=Welcome message and instructions for setting up the account. | E40=Optional; channels: email | F40=Modified: label -> code
+B41=↳ | C41=credential_change_confirmation | D41=Confirmation that account credentials have been changed. | E41=Mandatory - cannot be switched off; channels: email | F41=Modified: label -> code + mandatory
+B42=↳ | C42=security_new_device_alert | D42=Email alerts about security events or a newly used device. | E42=Mandatory - cannot be switched off; channels: email | F42=Modified: label -> code + mandatory
+B43=↳ | C43=account_recovery_assistance | D43=Instructions or updates to help recover account access. | E43=Mandatory - cannot be switched off; channels: email | F43=Modified: label -> code + mandatory
+B44=↳ | C44=connection_request_digest | D44=Summary email of received connection requests. | E44=Optional; channels: email | F44=Modified: label -> code
+B45=↳ | C45=activity_summary | D45=Summary of relevant account activity. | E45=Optional; channels: email | F45=Modified: label -> code
+B46=↳ | C46=message_digest | D46=Summary email of messages received. | E46=Optional; channels: email | F46=Modified: label -> code
+B47=↳ | C47=event_confirmation_details | D47=Confirmation and details for an event registration or invitation. | E47=Optional; channels: email | F47=Modified: label -> code
+B48=↳ | C48=event_change_cancellation | D48=Email notification about an event change or cancellation. | E48=Optional; channels: email | F48=Modified: label -> code
+B49=↳ | C49=transaction_confirmation | D49=Confirmation or receipt for a transaction. | E49=Optional; channels: email | F49=Modified: label -> code
+B50=↳ | C50=support_ticket_update | D50=Email updates about a support ticket. | E50=Optional; channels: email | F50=Modified: label -> code
+B51=↳ | C51=policy_privacy_terms_update | D51=Notices about changes to policies, privacy terms or service terms. | E51=Mandatory - cannot be switched off; channels: email | F51=Modified: label -> code + mandatory
+B52=↳ | C52=newsletter_marketing | D52=Optional newsletter or promotional communications, subject to marketing consent. | E52=Needs marketing consent in core.user_consents; channels: email | F52=Modified: label -> code + consent rule
+A53=5 | B53=enabled | C53=BOOLEAN  |  required | D53=Category on or off for this channel. | E53=Free format | F53=Modified: missing-row default + mandatory / consent rules
+B54=↳ | C54=true, false | D54=Example: true | E54=Missing row = enabled (same as the default). Mandatory categories cannot be switched off. newsletter_marketing needs granted consent in core.user_consents; without it, it is not sent.
+A55=6 | B55=priority_level | C55=TEXT  |  required | D55=Urgency the user wants for this category / channel. | E55=4 allowed values | F55=New: from her sheet; registry priority wins
+B56=↳ | C56=critical | D56=Cannot be downgraded by the user. | E56=Proposed - needs approval | F56=New (needs approval)
+B57=↳ | C57=high | D57=Important. | E57=Proposed - needs approval | F57=New (needs approval)
+B58=↳ | C58=normal | D58=Standard (default). | E58=Proposed - needs approval | F58=New (needs approval)
+B59=↳ | C59=low | D59=Can wait / digest. | E59=Proposed - needs approval | F59=New (needs approval)
+A60=7 | B60=preferred_notification_period | C60=TEXT  |  optional | D60=Preferred time window for notifications. | E60=4 allowed values | F60=New: from her sheet; values need approval
+B61=↳ | C61=anytime | D61=No time preference. | E61=Proposed - needs approval | F61=New (needs approval)
+B62=↳ | C62=morning | D62=Morning window. | E62=Time range needs approval | F62=New (needs approval)
+B63=↳ | C63=afternoon | D63=Afternoon window. | E63=Time range needs approval | F63=New (needs approval)
+B64=↳ | C64=evening | D64=Evening window. | E64=Time range needs approval | F64=New (needs approval)
+A65=8 | B65=snoozed_from | C65=TIMESTAMPTZ  |  optional | D65=Start of the snooze for this user + channel + category. | E65=Free format | F65=New: per-row snooze (quiet hours are in another table)
+B66=↳ | C66=Date and time; NULL = no snooze | D66=Example: 2026-11-06 22:00+05:30 | E66=Must be earlier than snoozed_until. Mandatory security / account notices cannot be snoozed.
+A67=9 | B67=snoozed_until | C67=TIMESTAMPTZ  |  optional | D67=End of the snooze. | E67=Free format | F67=New: per-row snooze
+B68=↳ | C68=Date and time; NULL = no snooze | D68=Example: 2026-11-07 07:00+05:30 | E68=Later than snoozed_from. An expired snooze is ignored and cleared automatically; applies only to this user / channel / category.
+A69=10 | B69=updated_at | C69=TIMESTAMPTZ  |  required | D69=When the preference changed. | E69=Free format
+B70=↳ | C70=Date and time | D70=Example: 2026-11-06 10:00+05:30 | E70=Set by trigger on every change (UTC). Admin changes are recorded in the audit trail.
+A72=core.device_tokens   |   13 columns (3 with fixed values) | F72=Modified
+A73=1 | B73=id | C73=BIGINT identity  |  required | D73=Token row ID. | E73=Free format
+B74=↳ | C74=1, 2, 3 ... | D74=Example: 1 | E74=Generated always.
+A75=2 | B75=user_id | C75=UUID  |  required | D75=Owner of the device. | E75=Free format | F75=Modified: UUID -> core.users(user_id)
+B76=↳ | C76=FK -> core.users(user_id) ON DELETE RESTRICT | D76=Example: fcba728f-... | E76=Authorization checks ownership on every access.
+A77=3 | B77=provider | C77=VARCHAR(20)  |  required | D77=Push service that delivers to the device. | E77=4 allowed values | F77=Modified: webpush, wns added
+B78=↳ | C78=apns | D78=Apple Push Notification service (iOS, iPadOS, macOS).
+B79=↳ | C79=fcm | D79=Firebase Cloud Messaging (Android).
+B80=↳ | C80=webpush | D80=Browser Web Push (service worker); subscription stored encrypted. | F80=New value (from her research)
+B81=↳ | C81=wns | D81=Windows Push Notification Services. | F81=New value (from her research)
+A82=4 | B82=platform | C82=VARCHAR(20)  |  required | D82=Device operating system / client. | E82=7 allowed values | F82=New column (from her research)
+B83=↳ | C83=android | D83=Android phone / tablet. | E83=fcm | F83=New (from her research)
+B84=↳ | C84=ios | D84=iPhone. | E84=apns | F84=New (from her research)
+B85=↳ | C85=ipados | D85=iPad. | E85=apns | F85=New (from her research)
+B86=↳ | C86=macos | D86=Mac app. | E86=apns | F86=New (from her research)
+B87=↳ | C87=windows | D87=Windows app. | E87=wns | F87=New (from her research)
+B88=↳ | C88=linux | D88=Linux app. | E88=Not enabled - provider not specified; verify first | F88=New (from her research)
+B89=↳ | C89=web | D89=Browser / web app. | E89=webpush (distinct from native desktop) | F89=New (from her research)
+A90=5 | B90=token_ciphertext | C90=BYTEA  |  required | D90=Encrypted raw token, needed to send pushes. | E90=Free format | F90=Modified: AES-256-GCM approved; Web Push handling
+B91=↳ | C91=AES-256-GCM ciphertext (+ auth tag) | D91=Example: \x01ab... | E91=AES-256-GCM only; key in Vault / KMS; never log plaintext. No AES-CTR, no CBC without MAC, no RSA for the token. Web Push: the whole subscription (endpoint, p256dh, auth) is stored here as encrypted JSON.
+A92=6 | B92=token_nonce | C92=BYTEA  |  required | D92=Nonce used for the AES-256-GCM encryption. | E92=Free format | F92=New (review fix)
+B93=↳ | C93=12 bytes | D93=Example: \x5f3a... | E93=Made by the vetted library; never reused with the same key. UNIQUE (token_key_version, token_nonce); CHECK length = 12.
+A94=7 | B94=token_key_version | C94=TEXT  |  required | D94=KMS / Vault key version used to encrypt this token. | E94=Free format | F94=New (review fix)
+B95=↳ | C95=Key version id | D95=Example: kms-key-v3 | E95=Supports key rotation. Key material is never stored in the database; only the push sender may decrypt.
+A96=8 | B96=token_fingerprint | C96=BYTEA  |  required | D96=Keyed fingerprint used to find / de-duplicate a token without decrypting it. | E96=Free format | F96=New: replaces token_hash (review fix)
+B97=↳ | C97=32-byte HMAC-SHA-256 | D97=Example: \x9c41... | E97=HMAC key kept in Vault / KMS, separate from the encryption key. UNIQUE (provider, token_fingerprint) WHERE status = 'active'. For Web Push it is computed from the endpoint. Same token from another user: the old row is revoked in the same transaction.
+A98=9 | B98=status | C98=VARCHAR(20)  |  required | D98=Token state. | E98=4 allowed values | F98=Modified: expired added; timestamp consistency
+B99=↳ | C99=active | D99=Can receive pushes (default).
+B100=↳ | C100=revoked | D100=Removed (logout / user). | E100=revoked_at filled
+B101=↳ | C101=invalid | D101=Provider rejected the token permanently. | E101=invalidated_at filled
+B102=↳ | C102=expired | D102=Past expires_at. | E102=expires_at filled | F102=New value (review fix)
+A103=10 | B103=created_at | C103=TIMESTAMPTZ  |  required | D103=When registered. | E103=Free format
+B104=↳ | C104=Date and time | D104=Example: 2026-11-06 10:00+05:30 | E104=Server-generated, UTC.
+A105=11 | B105=expires_at | C105=TIMESTAMPTZ  |  optional | D105=When the token expires, if known. | E105=Free format | F105=New (review fix)
+B106=↳ | C106=Date and time; NULL if unknown | D106=Example: 2027-02-04 10:00+05:30 | E106=Later than created_at. Expired tokens are not sent. 90-day purge is proposed, not approved.
+A107=12 | B107=revoked_at | C107=TIMESTAMPTZ  |  optional | D107=When revoked (logout / device removed). | E107=Free format | F107=Modified: only for status = revoked
+B108=↳ | C108=Date and time; NULL unless revoked | E108=Filled exactly when status = 'revoked'; >= created_at; updated with status in one step.
+A109=13 | B109=invalidated_at | C109=TIMESTAMPTZ  |  optional | D109=When the provider permanently rejected the token. | E109=Free format | F109=New (review fix)
+B110=↳ | C110=Date and time; NULL unless invalid | E110=Filled exactly when status = 'invalid'; set atomically and retries stop. Temporary errors use bounded exponential backoff and never invalidate.
+A112=core.connections   |   13 columns (4 with fixed values) | F112=Modified
+A113=1 | B113=id | C113=BIGINT identity  |  required | D113=Connection ID (one connection episode). | E113=Free format
+B114=↳ | C114=1, 2, 3 ... | D114=Example: 12 | E114=Generated always.
+A115=2 | B115=user_low_id | C115=UUID  |  required | D115=Lower UUID of the pair. | E115=Free format | F115=Modified: UUID -> core.users(user_id)
+B116=↳ | C116=FK -> core.users(user_id) ON DELETE RESTRICT | D116=Example: 1b2c... | E116=CHECK user_low_id < user_high_id (also blocks self-pairs). INDEX on both ids.
+A117=3 | B117=user_high_id | C117=UUID  |  required | D117=Higher UUID of the pair. | E117=Free format | F117=Modified: UUID -> core.users(user_id)
+B118=↳ | C118=FK -> core.users(user_id) ON DELETE RESTRICT | D118=Example: 9f8e... | E118=One open (active / paused) connection per pair (partial UNIQUE); closed ones keep history.
+A119=4 | B119=status | C119=VARCHAR(20)  |  required | D119=Connection state. | E119=3 allowed values | F119=Modified: 3 connection states (was 10)
+B120=↳ | C120=active | D120=Connected (default). | E120=One open connection per pair
+B121=↳ | C121=paused | D121=Temporarily paused. | E121=Still an open connection
+B122=↳ | C122=closed | D122=Ended. | E122=closed_at, closed_reason, closed_by_type filled | F122=Modified: 'disconnected' / 'blocked' now expressed by closed_reason
+A123=5 | B123=created_from_request_id | C123=BIGINT (same as connection_requests.id)  |  optional | D123=Request that created this connection. | E123=Free format | F123=Modified: one connection per request (review fix)
+B124=↳ | C124=FK -> core.connection_requests(id) ON DELETE RESTRICT | D124=Example: 34 | E124=UNIQUE when not NULL (one connection per request). Create the connection and consume the request in one transaction so retries cannot duplicate.
+A125=6 | B125=connection_source | C125=VARCHAR(30)  |  required | D125=Where the connection started. | E125=5 approved + 13 reference values | F125=New column
+B126=↳ | C126=profile | D126=Connection request sent from another user's profile. | E126=Approved
+B127=↳ | C127=search | D127=Person discovered through search results. | E127=Approved
+B128=↳ | C128=mutual_connections | D128=Person discovered through one or more mutual connections. | E128=Approved
+B129=↳ | C129=suggestions | D129=Person discovered through suggested profiles or people-you-may-know recommendations. | E129=Approved
+B130=↳ | C130=events | D130=Person discovered through an event page or event-related listing. | E130=Approved
+B131=↳ | C131=groups | D131=Person discovered through a shared group or community. | E131=Reference only - not approved | F131=Reference only
+B132=↳ | C132=phone_contacts | D132=Person discovered through synced or imported phone contacts. | E132=Reference only - not approved | F132=Reference only
+B133=↳ | C133=email_contacts | D133=Person discovered through imported email contacts. | E133=Reference only - not approved | F133=Reference only
+B134=↳ | C134=shared_link | D134=Person discovered through a profile or connection link shared by someone. | E134=Reference only - not approved | F134=Reference only
+B135=↳ | C135=qr_code | D135=Person discovered by scanning a profile QR code. | E135=Reference only - not approved | F135=Reference only
+B136=↳ | C136=username_lookup | D136=Person found by searching their exact username or handle. | E136=Reference only - not approved | F136=Reference only
+B137=↳ | C137=direct_invite | D137=Connection initiated through a direct invitation. | E137=Reference only - not approved | F137=Reference only
+B138=↳ | C138=nearby | D138=Person discovered through a nearby-people feature. | E138=Reference only - not approved | F138=Reference only
+B139=↳ | C139=external_integration | D139=Person discovered through an approved external platform or integration. | E139=Reference only - not approved | F139=Reference only
+B140=↳ | C140=event_attendees | D140=Person discovered from an event attendee list. | E140=Reference only - not approved | F140=Reference only
+B141=↳ | C141=people_you_may_know | D141=Person discovered through a people-you-may-know feature. | E141=Reference only - not approved | F141=Reference only
+B142=↳ | C142=contact_import | D142=Person discovered through an imported contact list. | E142=Reference only - not approved | F142=Reference only
+B143=↳ | C143=shared_content | D143=Person discovered through shared content, posts, or activity. | E143=Reference only - not approved | F143=Reference only
+A144=7 | B144=created_at | C144=TIMESTAMPTZ  |  required | D144=When connected. | E144=Free format
+B145=↳ | C145=Date and time | D145=Example: 2026-11-06 10:00+05:30 | E145=Server-generated, UTC.
+A146=8 | B146=closed_at | C146=TIMESTAMPTZ  |  optional | D146=When the connection ended. | E146=Free format | F146=Modified: tied to status = closed
+B147=↳ | C147=Date and time; NULL while open | E147=Filled exactly when status = 'closed'; >= created_at; updated with status in one step.
+A148=9 | B148=closed_reason | C148=VARCHAR(40)  |  optional | D148=Why it ended. | E148=41 allowed values | F148=Modified: 41 registry codes (22 proposed, need approval)
+B149=↳ | C149=user_removed | D149=A user chose to remove the connection. | E149=closed_by_type = user
+B150=↳ | C150=mutual_agreement | D150=Both users agreed to end the connection. | E150=closed_by_type = user
+B151=↳ | C151=blocked | D151=One user blocked the other user. | E151=closed_by_type = user | F151=Modified: replaces blocked_by_user_low / high
+B152=↳ | C152=privacy_request | D152=The connection was removed following a user's privacy request. | E152=closed_by_type = user
+B153=↳ | C153=consent_withdrawn | D153=A user withdrew consent to maintain the connection. | E153=closed_by_type = user
+B154=↳ | C154=not_interested | D154=A user is no longer interested in the connection. | E154=closed_by_type = user; proposed - needs approval | F154=New (proposed - needs approval)
+B155=↳ | C155=no_longer_relevant | D155=The connection is no longer relevant to a user. | E155=closed_by_type = user; proposed - needs approval | F155=New (proposed - needs approval)
+B156=↳ | C156=uncomfortable_interaction | D156=A user ended the connection after an uncomfortable interaction. | E156=closed_by_type = user; proposed - needs approval | F156=New (proposed - needs approval)
+B157=↳ | C157=user_reported | D157=A user ended the connection after reporting the other user. | E157=closed_by_type = user; proposed - needs approval | F157=New (proposed - needs approval)
+B158=↳ | C158=unwanted_contact | D158=A user ended the connection because of unwanted contact. | E158=closed_by_type = user; proposed - needs approval | F158=New (proposed - needs approval)
+B159=↳ | C159=user_left_platform | D159=A user left the platform. | E159=closed_by_type = user; proposed - needs approval | F159=New (proposed - needs approval)
+B160=↳ | C160=account_deletion_request | D160=A user requested account deletion. | E160=closed_by_type = user; proposed - needs approval | F160=New (proposed - needs approval)
+B161=↳ | C161=moderation_action | D161=The connection was ended by a moderation decision. | E161=closed_by_type = admin
+B162=↳ | C162=policy_violation | D162=The connection was closed because of a policy violation. | E162=closed_by_type = admin
+B163=↳ | C163=spam | D163=The connection was closed due to spam activity. | E163=closed_by_type = admin
+B164=↳ | C164=harassment | D164=The connection was closed due to harassment. | E164=closed_by_type = admin
+B165=↳ | C165=impersonation | D165=The connection was closed due to impersonation. | E165=closed_by_type = admin
+B166=↳ | C166=safety_concern | D166=The connection was closed because of a safety concern. | E166=closed_by_type = admin
+B167=↳ | C167=age_restriction | D167=The connection was closed because of an age-related restriction. | E167=closed_by_type = admin
+B168=↳ | C168=legal_requirement | D168=The connection was closed to comply with a legal requirement. | E168=closed_by_type = admin
+B169=↳ | C169=admin_action | D169=An administrator manually closed the connection. | E169=closed_by_type = admin
+B170=↳ | C170=fake_profile | D170=The connection was closed because of a fake profile. | E170=closed_by_type = admin; proposed - needs approval | F170=New (proposed - needs approval)
+B171=↳ | C171=underage_user | D171=The connection was closed because a participant was found to be underage. | E171=closed_by_type = admin; proposed - needs approval | F171=New (proposed - needs approval)
+B172=↳ | C172=scam_or_fraud | D172=The connection was closed due to scam or fraud activity. | E172=closed_by_type = admin; proposed - needs approval | F172=New (proposed - needs approval)
+B173=↳ | C173=hate_speech | D173=The connection was closed due to hate speech. | E173=closed_by_type = admin; proposed - needs approval | F173=New (proposed - needs approval)
+B174=↳ | C174=inappropriate_content | D174=The connection was closed due to inappropriate content. | E174=closed_by_type = admin; proposed - needs approval | F174=New (proposed - needs approval)
+B175=↳ | C175=ban_evasion | D175=The connection was closed due to ban evasion. | E175=closed_by_type = admin; proposed - needs approval | F175=New (proposed - needs approval)
+B176=↳ | C176=verification_failure | D176=The connection was closed because verification failed. | E176=closed_by_type = admin; proposed - needs approval | F176=New (proposed - needs approval)
+B177=↳ | C177=duplicate_account | D177=The connection was closed because of a duplicate account. | E177=closed_by_type = admin; proposed - needs approval | F177=New (proposed - needs approval)
+B178=↳ | C178=account_deleted | D178=The connection was closed because an account was deleted. | E178=closed_by_type = system
+B179=↳ | C179=account_deactivated | D179=The connection was closed because an account was deactivated. | E179=closed_by_type = system
+B180=↳ | C180=account_suspended | D180=The connection was closed because an account was suspended. | E180=closed_by_type = system
+B181=↳ | C181=inactivity | D181=The connection was closed after a prolonged period of inactivity. | E181=closed_by_type = system
+B182=↳ | C182=system_action | D182=The connection was closed automatically by the system, such as during cleanup. | E182=closed_by_type = system
+B183=↳ | C183=account_banned | D183=The connection was closed because an account was banned. | E183=closed_by_type = system; proposed - needs approval | F183=New (proposed - needs approval)
+B184=↳ | C184=verification_expired | D184=The connection was closed because a required verification expired. | E184=closed_by_type = system; proposed - needs approval | F184=New (proposed - needs approval)
+B185=↳ | C185=kyc_review_failed | D185=The connection was closed because a participant failed KYC review. | E185=closed_by_type = system; proposed - needs approval | F185=New (proposed - needs approval)
+B186=↳ | C186=duplicate_account_merge | D186=The connection was closed because duplicate accounts were merged. | E186=closed_by_type = system; proposed - needs approval | F186=New (proposed - needs approval)
+B187=↳ | C187=data_retention_expiry | D187=The connection was closed after its data retention period ended. | E187=closed_by_type = system; proposed - needs approval | F187=New (proposed - needs approval)
+B188=↳ | C188=fraud_detection | D188=The connection was closed after automated fraud detection. | E188=closed_by_type = system; proposed - needs approval | F188=New (proposed - needs approval)
+B189=↳ | C189=user_ineligible | D189=The connection was closed because a participant no longer meets eligibility requirements. | E189=closed_by_type = system; proposed - needs approval | F189=New (proposed - needs approval)
+A190=10 | B190=closed_by_type | C190=TEXT  |  optional | D190=Who closed it. | E190=3 allowed values | F190=New (review fix)
+B191=↳ | C191=user | D191=A connection participant. | E191=closed_by_user_id filled | F191=New
+B192=↳ | C192=admin | D192=Admin / moderation team. | E192=closed_by_user_id NULL | F192=New
+B193=↳ | C193=system | D193=Application / automated process. | E193=closed_by_user_id NULL | F193=New
+A194=11 | B194=closed_by_user_id | C194=UUID  |  optional | D194=User who disconnected / blocked (if a user did). | E194=Free format | F194=Modified: UUID + replaces blocked_by_user_low/high
+B195=↳ | C195=FK -> core.users(user_id) ON DELETE RESTRICT | D195=Example: 1b2c... | E195=Must be user_low_id or user_high_id when closed_by_type = 'user'; NULL for admin / system. Replaces her blocked_by_user_low / high.
+A196=12 | B196=last_interaction_at | C196=TIMESTAMPTZ  |  optional | D196=Latest qualifying interaction. | E196=Free format | F196=New (review fix)
+B197=↳ | C197=Date and time | D197=Example: 2026-11-06 11:00+05:30 | E197=Updated in the same transaction as the message event; never moves backwards. Reconcile against message events.
+A198=13 | B198=interaction_count | C198=BIGINT  |  required | D198=Number of qualifying interactions. | E198=Free format | F198=New (review fix)
+B199=↳ | C199=0, 1, 2 ... | D199=Example: 15 | E199=CHECK >= 0. Increment atomically (no lost updates). Reconcile against message events.
+A201=core.relations   |   13 columns (4 with fixed values) | F201=Modified
+A202=1 | B202=id | C202=BIGINT identity  |  required | D202=Relation ID. | E202=Free format
+B203=↳ | C203=1, 2, 3 ... | D203=Example: 1 | E203=Generated always.
+A204=2 | B204=actor_user_id | C204=UUID  |  required | D204=User who relates. | E204=Free format | F204=Modified: UUID -> core.users(user_id)
+B205=↳ | C205=FK -> core.users(user_id) ON DELETE RESTRICT | D205=Example: fcba728f-... | E205=CHECK actor_user_id <> target_user_id. Must equal the authenticated user - never trust a client-supplied value.
+A206=3 | B206=target_user_id | C206=UUID  |  required | D206=Owner of the prompt answer. | E206=Free format | F206=Modified: UUID -> core.users(user_id)
+B207=↳ | C207=FK -> core.users(user_id) ON DELETE RESTRICT | D207=Example: 6be8fb9a-... | E207=Target must pass visibility, eligibility and block / safety checks.
+A208=4 | B208=profile_prompt_id | C208=BIGINT (same as profile_prompts.id)  |  optional | D208=Prompt answer being related to. | E208=Free format | F208=Modified: nullable + ownership check
+B209=↳ | C209=FK -> core.profile_prompts(id) (Thanushree) | D209=Example: 7 | E209=NULL when the action is not prompt-specific. Composite FK (profile_prompt_id, target_user_id) so the prompt belongs to the target; needs UNIQUE (id, user_id) on profile_prompts.
+A210=5 | B210=relation_source | C210=VARCHAR(30)  |  required | D210=Where the action started. | E210=5 approved + 9 reference values | F210=New column
+B211=↳ | C211=profile | D211=Relation action initiated from a user's profile. | E211=Approved (assumed - confirm)
+B212=↳ | C212=prompt_answer | D212=Relation action initiated from a specific profile prompt answer. | E212=Approved (assumed - confirm)
+B213=↳ | C213=search | D213=Target profile or prompt discovered through search. | E213=Approved (assumed - confirm)
+B214=↳ | C214=mutual_connections | D214=Target discovered through mutual connections. | E214=Approved (assumed - confirm)
+B215=↳ | C215=suggestions | D215=Target discovered through profile suggestions. | E215=Approved (assumed - confirm)
+B216=↳ | C216=groups | D216=Target discovered through a shared group or community. | E216=Reference only - not approved | F216=Reference only
+B217=↳ | C217=events | D217=Target discovered through an event page or event-related activity. | E217=Reference only - not approved | F217=Reference only
+B218=↳ | C218=feed | D218=Target discovered through the app's feed. | E218=Reference only - not approved | F218=Reference only
+B219=↳ | C219=notification | D219=User opened a notification and performed the relation action. | E219=Reference only - not approved | F219=Reference only
+B220=↳ | C220=shared_link | D220=Target opened through a shared profile or content link. | E220=Reference only - not approved | F220=Reference only
+B221=↳ | C221=qr_code | D221=Target opened by scanning a profile QR code. | E221=Reference only - not approved | F221=Reference only
+B222=↳ | C222=nearby | D222=Target discovered through a nearby-people feature. | E222=Reference only - not approved | F222=Reference only
+B223=↳ | C223=external_integration | D223=Action initiated from an approved external platform or integration. | E223=Reference only - not approved | F223=Reference only
+B224=↳ | C224=direct_invite | D224=Action initiated through a direct invitation. | E224=Reference only - not approved | F224=Reference only
+A225=6 | B225=reaction_type | C225=VARCHAR(20)  |  required | D225=Kind of relate action. | E225=4 allowed values | F225=New column (needs approval); 'save' not kept
+B226=↳ | C226=like | D226=Like the profile prompt or its answer. | E226=Needs product approval | F226=New (needs approval)
+B227=↳ | C227=wave | D227=Send a wave to get the other user's attention. | E227=Needs product approval | F227=New (needs approval)
+B228=↳ | C228=endorse | D228=Show support or endorsement for the prompt answer. | E228=Needs product approval | F228=New (needs approval)
+B229=↳ | C229=react | D229=Use a generic reaction action. | E229=Needs product approval | F229=New (needs approval)
+A230=7 | B230=status | C230=VARCHAR(20)  |  required | D230=Lifecycle. | E230=4 allowed values | F230=Modified: lifecycle rules added
+B231=↳ | C231=active | D231=Relation action is active and visible.
+B232=↳ | C232=undone | D232=Actor has withdrawn or undone the relation action. | E232=undone_at filled
+B233=↳ | C233=hidden | D233=Relation action is hidden from view.
+B234=↳ | C234=expired | D234=Relation action has passed its expiry and is no longer active.
+A235=8 | B235=is_mutual | C235=BOOLEAN  |  required | D235=Both users have qualifying actions toward each other. | E235=Free format | F235=New (review: prefer derived)
+B236=↳ | C236=true, false | D236=Example: false | E236=Prefer deriving it from reciprocal eligible actions. If stored, update transactionally; TRUE only when both directions qualify.
+A237=9 | B237=non_mutual_reason | C237=VARCHAR(40)  |  optional | D237=Main reason the relation is not mutual. | E237=7 allowed values | F237=New
+B238=↳ | C238=user_blocked | D238=Terminal while the block applies: a block prevents the reciprocal relationship. | E238=Precedence 1 of 7 | F238=New
+B239=↳ | C239=account_unavailable | D239=Derived: one participant account is deleted, suspended or deactivated. | E239=Precedence 2 of 7 | F239=New
+B240=↳ | C240=user_ineligible | D240=Derived: one participant does not currently meet the eligibility requirements. | E240=Precedence 3 of 7 | F240=New
+B241=↳ | C241=action_withdrawn | D241=Terminal for the current action: a qualifying action was withdrawn. | E241=Precedence 4 of 7 | F241=New
+B242=↳ | C242=action_declined | D242=Terminal: the reciprocal action was explicitly declined or rejected. | E242=Precedence 5 of 7 | F242=New
+B243=↳ | C243=action_expired | D243=Terminal: the opportunity for the reciprocal action expired. | E243=Precedence 6 of 7 | F243=New
+B244=↳ | C244=awaiting_reciprocal_action | D244=Transient: the other user has not yet performed the qualifying reciprocal action. | E244=Precedence 7 of 7 | F244=New
+A245=10 | B245=idempotency_key | C245=VARCHAR(255)  |  optional | D245=Stops duplicates on retry. | E245=Free format | F245=Modified: scope rules (review fix)
+B246=↳ | C246=Key or NULL | D246=Example: rel-7f3a | E246=Same key + same payload returns the original result; same key + different payload is rejected. Client / operation scope and retention still to be defined.
+A247=11 | B247=created_at | C247=TIMESTAMPTZ  |  required | D247=When created. | E247=Free format
+B248=↳ | C248=Date and time | D248=Example: 2026-11-06 10:00+05:30 | E248=Server-generated, UTC.
+A249=12 | B249=expires_at | C249=TIMESTAMPTZ  |  optional | D249=When the action expires. | E249=Free format | F249=New (review fix)
+B250=↳ | C250=Date and time; NULL = no expiry | D250=Example: 2026-11-13 10:00+05:30 | E250=Later than created_at. core.expire_relations() sets status = 'expired' (idempotent).
+A251=13 | B251=undone_at | C251=TIMESTAMPTZ  |  optional | D251=When undone. | E251=Free format
+B252=↳ | C252=Date and time; NULL if not undone | E252=Filled exactly when status = 'undone'; >= created_at.
+
+SHEET: Values Not Kept [state=]
+A1=Values from her sheet that were not kept
+A2=Each idea with the reason. Bring back any of them with a real use case and approval.
+A4=# | B4=Table | C4=Column | D4=Her value(s) | E4=Why not kept
+A5=1 | B5=core.notification_category_preferences | C5=channel | D5=sms | E5=Not in base file MVP; SMS in India needs DLT registration + cost; security codes by SMS are sent by identity, not a preference.
+A6=2 | B6=core.notification_category_preferences | C6=channel | D6=whatsapp | E6=Not in base file; needs WhatsApp Business provider + opt-in consent.
+A7=3 | B7=core.notification_category_preferences | C7=category | D7=One-time passcode (OTP), Multi-factor authentication code, Account recovery code, Login verification | E7=Transactional security codes sent by the identity team (contact_verifications). Never a user preference - always delivered.
+A8=4 | B8=core.notification_category_preferences | C8=quiet hours | D8=Quiet-hours start / end / timezone | E8=Held in another team member's table. Here only snoozed_from / snoozed_until are kept; snooze wins over preferred period.
+A9=5 | B9=core.device_tokens | C9=device_type | D9=Laptop, Mobile, Tablet, Desktop | E9=Not needed for delivery; platform column covers it.
+A10=6 | B10=core.device_tokens | C10=token_hash | D10=token_hash (plain hash column) | E10=Replaced by token_fingerprint - keyed HMAC-SHA-256, with a UNIQUE rule for active tokens.
+A11=7 | B11=core.device_tokens | C11=hashing | D11=SHA-256 plain, SHA-3, BLAKE2, MD5 / SHA-1 | E11=HMAC-SHA-256 chosen; MD5 / SHA-1 never.
+A12=8 | B12=core.device_tokens | C12=encryption | D12=ChaCha20-Poly1305, AES-CBC+HMAC, AES-CTR, RSA | E12=AES-256-GCM chosen. Unauthenticated CTR, CBC without encrypt-then-MAC and RSA for the token itself are not allowed.
+A13=9 | B13=core.device_tokens | C13=last_seen_at | D13=last_seen_at | E13=Meaning unclear (app activity vs provider confirmation). Add back only with one defined meaning updated from trusted server events.
+A14=10 | B14=core.connections | C14=status | D14=pending, requested, accepted, expired | E14=Request stages - they belong to Prajwal's core.connection_requests. 'accepted' = active here.
+A15=11 | B15=core.connections | C15=status | D15=muted, archived | E15=Per-user view preferences, not a state of the pair.
+A16=12 | B16=core.connections | C16=status | D16=restricted | E16=Moderation state - needs moderation approval before it is added.
+A17=13 | B17=core.connections | C17=closed_reason | D17=request_declined, request_withdrawn, request_timeout, request_rejected | E17=Request outcomes - in core.connection_requests.
+A18=14 | B18=core.connections | C18=closed_reason | D18=blocked_by_user_low, blocked_by_user_high | E18=Direction is stored in closed_by_user_id; one 'blocked' code.
+A19=15 | B19=core.connections | C19=closed_reason | D19=duplicate_connection, merged_record, data_cleanup, migration, service_retired, feature_disabled, business_rule | E19=Internal operations - recorded as system_action.
+A20=16 | B20=core.connections | C20=closed_reason | D20=security_incident, compromised_account | E20=Merged into safety_concern.
+A21=17 | B21=core.connections | C21=closed_reason | D21=unknown | E21=Every closure must have a known reason; use 'other' only after approval.
+A22=18 | B22=core.relations | C22=reaction_type | D22=save | E22=Saving is private, not a relation to another user - consider a separate saved-profiles table.
+A23=19 | B23=core.relations | C23=relation_source | D23=contact_sync, address_book, email_lookup, phone_lookup ... (about 50 values) | E23=Only 5 sources approved; the rest are analytics (analytics.product_events). Contact / email / phone lookup also raises DPDP privacy issues.
+A24=20 | B24=core.relations | C24=non_mutual_reason | D24=not_interacted_yet, target_not_seen, pending_response, delivery_failed ... (25 reasons) | E24=Cut to 7 relationship reasons. Delivery and sync failures are not relationship states.
+A25=21 | B25=core.relations | C25=(sheet) | D25=Rows 52-61 repeat rows 1-10 | E25=Duplicate rows in the sheet.
+
+SHEET: Relationships [state=]
+A1=Relationships (foreign keys)
+A2=User links point to core.users(user_id) (Aditya); other links go to the owner's tables or to the three supporting registries.
+A4=Child table | B4=Column | C4=Parent table | D4=Parent column | E4=On delete | F4=Change
+A5=core.notification_category_preferences | B5=user_id | C5=core.users (Aditya) | D5=user_id | E5=RESTRICT | F5=Modified: UUID -> users.user_id
+A6=core.notification_category_preferences | B6=(channel, category) | C6=core.notification_category_channels | D6=(channel, category_code) | E6=RESTRICT | F6=New: only allowed pairs
+A7=core.notification_category_channels | B7=category_code | C7=core.notification_categories | D7=category_code | E7=RESTRICT | F7=New: registry
+A8=core.device_tokens | B8=user_id | C8=core.users (Aditya) | D8=user_id | E8=RESTRICT | F8=Modified: UUID -> users.user_id
+A9=core.connections | B9=user_low_id | C9=core.users (Aditya) | D9=user_id | E9=RESTRICT | F9=Modified: UUID -> users.user_id
+A10=core.connections | B10=user_high_id | C10=core.users (Aditya) | D10=user_id | E10=RESTRICT | F10=Modified: UUID -> users.user_id
+A11=core.connections | B11=closed_by_user_id | C11=core.users (Aditya) | D11=user_id | E11=RESTRICT | F11=Modified: UUID -> users.user_id
+A12=core.connections | B12=created_from_request_id | C12=core.connection_requests (Prajwal) | D12=id | E12=RESTRICT | F12=Added later - after that table exists
+A13=core.connections | B13=(closed_reason, closed_by_type) | C13=core.connection_closed_reasons | D13=(code, closed_by_type) | E13=RESTRICT | F13=New: reason must match actor type
+A14=core.relations | B14=actor_user_id | C14=core.users (Aditya) | D14=user_id | E14=RESTRICT | F14=Modified: UUID -> users.user_id
+A15=core.relations | B15=target_user_id | C15=core.users (Aditya) | D15=user_id | E15=RESTRICT | F15=Modified: UUID -> users.user_id
+A16=core.relations | B16=(profile_prompt_id, target_user_id) | C16=core.profile_prompts (Thanushree) | D16=(id, user_id) | E16=RESTRICT | F16=Prompt must belong to the target; needs UNIQUE (id, user_id)
+
+SHEET: Open Items [state=]
+A1=Open items
+A2=To settle with the tech lead / mentor.
+A4=# | B4=Area | C4=Item | D4=Owner | E4=Status
+A5=1 | B5=Question | C5=Notification categories: approve the 38 codes, the 8 mandatory notices and the consent-gated newsletter_marketing (all proposed). | D5=Product / mentor | E5=Open
+A6=2 | B6=Question | C6=Approve the 22 proposed closed-reason codes (41 in total) and their actor type / user-visible flags. | D6=Product / mentor | E6=Open
+A7=3 | B7=Question | C7=Push providers webpush and wns: approve (base file: apns, fcm)? Linux stays disabled until verified. | D7=Engineering | E7=Open
+A8=4 | B8=Question | C8=relations.reaction_type (like, wave, endorse, react): approve? 'save' not kept. | D8=Product / mentor | E8=Open
+A9=5 | B9=Question | C9=Confirm the 5 approved relation_source values (assumed: profile, prompt_answer, search, mutual_connections, suggestions) and the 5 connection_source values. | D9=Mahera + mentor | E9=Open
+A10=6 | B10=Question | C10=priority_level and preferred_notification_period values are proposed; keep priority_level here or leave it only in the category registry? | D10=Product / mentor | E10=Open
+A11=7 | B11=Question | C11=connections status 'restricted': add as a moderation state? | D11=Mahera + mentor | E11=Open
+A12=8 | B12=Question | C12=Device-token retention: 90-day purge for revoked / invalid / expired tokens is proposed, not approved. | D12=Engineering | E12=Open
+A13=9 | B13=Question | C13=relations.idempotency_key: define client / operation scope fields and retention period. | D13=Mahera + mentor | E13=Open
+A14=10 | B14=Process | C14=Web Push: confirm the sender can use the subscription stored as encrypted JSON (endpoint + p256dh + auth). | D14=Engineering | E14=Open
+A15=11 | B15=Dependency | C15=connections.created_from_request_id -> Prajwal's core.connection_requests (BIGINT). | D15=Mahera + Prajwal | E15=Open
+A16=12 | B16=Dependency | C16=relations.profile_prompt_id -> Thanushree's core.profile_prompts: needs UNIQUE (id, user_id) so the prompt belongs to the target user. | D16=Mahera + Thanushree | E16=Open
+A17=13 | B17=Dependency | C17=Rajath's conversations.connection_id -> core.connections(id). | D17=Mahera + Rajath | E17=Open
+A18=14 | B18=Dependency | C18=Marketing consent check reads Aditya's core.user_consents - confirm the user column name (user_id or user_ref). | D18=Mahera + Aditya | E18=Open
+A19=15 | B19=Dependency | C19=Quiet hours + timezone live in another table - the delivery scheduler must apply them together with snoozed_from / snoozed_until. | D19=Mahera + table owner | E19=Open

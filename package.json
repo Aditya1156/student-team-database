@@ -1,0 +1,26 @@
+{
+  "name": "student-team-database",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "seed:generate": "node scripts/generate-seed.mjs",
+    "db:lint": "supabase db lint --remote --level warning",
+    "test": "supabase db lint --remote --level warning"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aditya1156/student-team-database.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Aditya1156/student-team-database/issues"
+  },
+  "homepage": "https://github.com/Aditya1156/student-team-database#readme",
+  "devDependencies": {
+    "supabase": "^3.0.0"
+  }
+}

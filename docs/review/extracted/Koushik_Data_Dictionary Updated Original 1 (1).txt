@@ -1,0 +1,391 @@
+﻿SOURCE: Koushik_Data_Dictionary Updated Original 1 (1).xlsx
+
+SHEET: Read Me [state=]
+A1=Data Dictionary - Koushik B K (5 tables)
+A2=Schema: core - prepared 05 Nov 2026 from 'social_media_db_all_tables_columns.xlsx' with review fixes applied
+A4=What this is | B4=Every table, column and allowed value of Koushik B K's 5 tables (as per team allocation): notifications, outbox_events, account_data_jobs, account_data_job_steps, media_deletion_jobs. Other members' tables are not included.
+A5=YELLOW rows | B5=New or modified compared with the original workbook. The 'Change' column says exactly what changed. Removed items are listed in 'What Changed'.
+A6=How to read it | B6=Tables -> Data Dictionary (every column) -> Value Lists (table > column > values) -> Relationships.
+A7=Link to users | B7=Every user reference is <column> UUID REFERENCES core.users(user_id) ON DELETE RESTRICT. core.users belongs to the identity team.
+A8=Common rules | B8=ON DELETE RESTRICT everywhere (except media_deletion_jobs -> profile_media SET NULL, Prajwal's table). No personal text in payloads or messages. Status lists are named CHECKs.
+A9=Key words | B9=PK = primary key. FK = link to another table. UNIQUE = no duplicates. CHECK = rule the database enforces.
+
+SHEET: What Changed [state=]
+A1=What changed from the original workbook
+A2=Review fixes applied in this dictionary.
+A4=Type | B4=Item | C4=What changed
+A5=Scope | B5=Koushik's 5 tables only | C5=notifications, outbox_events, account_data_jobs, account_data_job_steps, media_deletion_jobs (as per team allocation).
+A6=Not included | B6=core.users | C6=Owned by Aditya (identity). Link with user_id UUID -> core.users(user_id).
+A7=Not included | B7=core.profile_media | C7=Owned by Prajwal.
+A8=Not included | B8=core.notification_category_preferences | C8=Owned by Mahera Muskan.
+A9=Not included | B9=Helper tables in his workbook | C9=notification_delivery_attempts, outbox_event_attempts, account_data_job_logs, account_data_job_step_logs, media_deletion_attempts - not in the allocation; confirm with mentor before adding.
+A10=Modified | B10=notifications.recipient_user_id | C10=BIGINT -> UUID, FK core.users(user_id) RESTRICT.
+A11=Modified | B11=account_data_jobs.user_id | C11=BIGINT nullable SET NULL -> UUID required, FK core.users(user_id) RESTRICT.
+A12=Modified | B12=notifications.source_event_id | C12=FK to core.outbox_events added (was 'no FK').
+A13=Modified | B13=notifications.payload | C13=IDs only - no names or personal text (base SEC-008).
+A14=Modified | B14=outbox_events.aggregate_id | C14=BIGINT -> TEXT (can hold UUID user IDs).
+A15=Modified | B15=Status / type lists | C15=Named CHECKs; outbox_events adds 'published'; notification_type fixed list.
+A16=Added | B16=updated_at | C16=notifications, account_data_jobs, media_deletion_jobs.
+
+SHEET: Tables [state=]
+A1=Tables overview
+A2=Koushik's 5 tables. 'Columns' counted live from the Data Dictionary sheet.
+A4=# | B4=Table | C4=What it stores | D4=One row means | E4=Columns | F4=Change
+A5=1 | B5=core.notifications | C5=In-app notifications for a user. | D5=One row per notification | E5=11 | F5=Modified: recipient_user_id UUID + RESTRICT; source_event_id FK; status CHECK; updated_at
+A6=2 | B6=core.outbox_events | C6=Events waiting to be processed (outbox pattern with worker leases). | D6=One row per event | E6=17 | F6=Modified: aggregate_id TEXT; status adds 'published'
+A7=3 | B7=core.account_data_jobs | C7=Export / deletion jobs for a user's data. | D7=One row per job | E7=17 | F7=Modified: user_id UUID + RESTRICT; started by identity grace_period_ended; updated_at
+A8=4 | B8=core.account_data_job_steps | C8=Steps inside an export / deletion job. | D8=One row per step | E8=12
+A9=5 | B9=core.media_deletion_jobs | C9=Jobs that delete media files from storage. | D9=One row per job | E9=14 | F9=Modified: status CHECK; updated_at
+D10=Total columns | E10=71
+
+SHEET: Data Dictionary [state=]
+A1=Data dictionary - every column
+A2=Filter by Table. Yellow = new or modified.
+A4=Table | B4=# | C4=Column | D4=Data type | E4=Required | F4=Default | G4=Key | H4=Possible values | I4=Meaning | J4=Example | K4=Rules | L4=Change
+A5=core.notifications | B5=1 | C5=id | D5=BIGINT identity | E5=Yes | F5=auto | G5=PK | H5=1, 2, 3 ... | I5=Unique notification ID. | J5=1 | K5=Generated always.
+A6=core.notifications | B6=2 | C6=recipient_user_id | D6=UUID | E6=Yes | G6=FK | H6=FK -> core.users(user_id) ON DELETE RESTRICT | I6=User receiving the notification. | J6=fcba728f-... | K6=Worker checks users.account_status before create / send. | L6=Modified: BIGINT -> UUID users(user_id)
+A7=core.notifications | B7=3 | C7=notification_type | D7=VARCHAR(50) | E7=Yes | H7=like, comment, follow, mention, reply | I7=Type of notification. | J7=like | K7=Named CHECK. | L7=Modified: fixed list (was examples)
+A8=core.notifications | B8=4 | C8=dedupe_key | D8=VARCHAR(255) | E8=No | F8=NULL | G8=UNIQUE with recipient_user_id | H8=Any key, or NULL | I8=Prevents duplicate notifications. | J8=like:post101:actor2 | K8=Unique with recipient_user_id when supplied.
+A9=core.notifications | B9=5 | C9=source_event_id | D9=BIGINT | E9=No | F9=NULL | G9=FK | H9=FK -> core.outbox_events(id) ON DELETE RESTRICT | I9=Event that caused the notification. | J9=101 | K9=NULL allowed until linked. | L9=Modified: FK added (was 'no FK')
+A10=core.notifications | B10=6 | C10=payload | D10=JSONB | E10=Yes | F10='{}' | H10=IDs only, e.g. {"actor_user_id":"..","post_id":101} | I10=Details for building the message. | J10={"post_id":101} | K10=No names or personal text; message text built when displayed (base SEC-008). | L10=Modified: IDs only (example had a name)
+A11=core.notifications | B11=7 | C11=status | D11=VARCHAR(20) | E11=Yes | F11='queued' | H11=queued, delivered, read, suppressed, failed | I11=Notification state. | J11=delivered | K11=Named CHECK. | L11=Modified: named CHECK added
+A12=core.notifications | B12=8 | C12=created_at | D12=TIMESTAMPTZ | E12=Yes | F12=NOW() | H12=Date-time | I12=When created. | J12=2026-11-05 10:00+05:30
+A13=core.notifications | B13=9 | C13=delivered_at | D13=TIMESTAMPTZ | E13=No | F13=NULL | H13=Date-time or empty | I13=When delivered. | J13=2026-11-05 10:00+05:30 | K13=NULL until delivered.
+A14=core.notifications | B14=10 | C14=read_at | D14=TIMESTAMPTZ | E14=No | F14=NULL | H14=Date-time or empty | I14=When read. | J14=2026-11-05 10:05+05:30 | K14=NULL until read.
+A15=core.notifications | B15=11 | C15=updated_at | D15=TIMESTAMPTZ | E15=Yes | F15=NOW() | H15=Date-time | I15=Last change. | J15=2026-11-05 10:05+05:30 | K15=Set by trigger. | L15=New
+A16=core.outbox_events | B16=1 | C16=id | D16=BIGINT identity | E16=Yes | F16=auto | G16=PK | H16=1, 2, 3 ... | I16=Unique event ID. | J16=1 | K16=Generated always.
+A17=core.outbox_events | B17=2 | C17=aggregate_type | D17=VARCHAR(50) | E17=Yes | H17=post, user, comment | I17=Type of entity involved. | J17=post
+A18=core.outbox_events | B18=3 | C18=aggregate_id | D18=TEXT | E18=Yes | G18=UNIQUE (with type, sequence) | H18=ID of the entity as text (number or UUID) | I18=ID of the related entity. | J18=101 / fcba728f-... | K18=Text so it can hold UUID user IDs. | L18=Modified: BIGINT -> TEXT
+A19=core.outbox_events | B19=4 | C19=aggregate_sequence | D19=BIGINT | E19=Yes | G19=UNIQUE (with type, id) | H19=1, 2, 3 ... | I19=Event order for that entity. | J19=3
+A20=core.outbox_events | B20=5 | C20=event_type | D20=VARCHAR(100) | E20=Yes | H20=e.g. post.liked, post.commented | I20=Name of the event. | J20=post.liked
+A21=core.outbox_events | B21=6 | C21=payload | D21=JSONB | E21=Yes | H21=IDs only | I21=Details for processing. | J21={"post_id":101} | K21=No personal text.
+A22=core.outbox_events | B22=7 | C22=created_at | D22=TIMESTAMPTZ | E22=Yes | F22=NOW() | H22=Date-time | I22=When created. | J22=2026-11-05 10:00+05:30
+A23=core.outbox_events | B23=8 | C23=published_at | D23=TIMESTAMPTZ | E23=No | F23=NULL | H23=Date-time or empty | I23=When published. | J23=2026-11-05 10:00+05:30 | K23=Filled when status = published. | L23=Modified: linked to new 'published' status
+A24=core.outbox_events | B24=9 | C24=status | D24=VARCHAR(20) | E24=Yes | F24='pending' | H24=pending, processing, published, dead_letter | I24=Processing state. | J24=published | K24=Named CHECK. | L24=Modified: 'published' added + named CHECK
+A25=core.outbox_events | B25=10 | C25=attempt_count | D25=INT | E25=Yes | F25=0 | H25=>= 0 | I25=Processing attempts. | J25=1 | K25=CHECK >= 0.
+A26=core.outbox_events | B26=11 | C26=next_attempt_at | D26=TIMESTAMPTZ | E26=No | F26=NULL | H26=Date-time or empty | I26=When to retry. | J26=2026-11-05 10:05+05:30
+A27=core.outbox_events | B27=12 | C27=last_error_code | D27=VARCHAR(100) | E27=No | F27=NULL | H27=Error code or NULL | I27=Latest error. | J27=TIMEOUT
+A28=core.outbox_events | B28=13 | C28=event_key | D28=VARCHAR(255) | E28=Yes | G28=UNIQUE | H28=Unique key | I28=Prevents duplicate events. | J28=post101:like:actor2
+A29=core.outbox_events | B29=14 | C29=lease_token | D29=UUID | E29=No | F29=NULL | H29=UUID or NULL | I29=Worker's claim token. | J29=9b2e... | K29=NULL when no active lease.
+A30=core.outbox_events | B30=15 | C30=dead_lettered_at | D30=TIMESTAMPTZ | E30=No | F30=NULL | H30=Date-time or empty | I30=When moved to dead_letter. | K30=NULL unless dead_letter.
+A31=core.outbox_events | B31=16 | C31=lease_owner | D31=VARCHAR(100) | E31=No | F31=NULL | H31=Worker name or NULL | I31=Worker processing the event. | J31=worker-1
+A32=core.outbox_events | B32=17 | C32=lease_expires_at | D32=TIMESTAMPTZ | E32=No | F32=NULL | H32=Date-time or empty | I32=When the lease ends.
+A33=core.account_data_jobs | B33=1 | C33=id | D33=BIGINT identity | E33=Yes | F33=auto | G33=PK | H33=1, 2, 3 ... | I33=Unique job ID. | J33=1 | K33=Generated always.
+A34=core.account_data_jobs | B34=2 | C34=user_id | D34=UUID | E34=Yes | G34=FK | H34=FK -> core.users(user_id) ON DELETE RESTRICT | I34=Whose data is handled. | J34=fcba728f-... | K34=Users are kept as tombstones, so RESTRICT is safe and the job never loses its user. | L34=Modified: BIGINT nullable SET NULL -> UUID required RESTRICT
+A35=core.account_data_jobs | B35=3 | C35=job_type | D35=VARCHAR(20) | E35=Yes | H35=export, deletion | I35=Requested operation. | J35=deletion | K35=Named CHECK. Deletion jobs are created by identity's grace_period_ended. | L35=Modified: named CHECK + link to identity deletion flow
+A36=core.account_data_jobs | B36=4 | C36=status | D36=VARCHAR(20) | E36=Yes | F36='queued' | H36=queued, processing, completed, failed, cancelled | I36=Job state. | J36=completed | K36=Named CHECK. | L36=Modified: named CHECK added
+A37=core.account_data_jobs | B37=5 | C37=requested_at | D37=TIMESTAMPTZ | E37=Yes | F37=NOW() | H37=Date-time | I37=When requested. | J37=2026-11-05 02:00+05:30
+A38=core.account_data_jobs | B38=6 | C38=started_at | D38=TIMESTAMPTZ | E38=No | F38=NULL | H38=Date-time or empty | I38=When processing began.
+A39=core.account_data_jobs | B39=7 | C39=completed_at | D39=TIMESTAMPTZ | E39=No | F39=NULL | H39=Date-time or empty | I39=When finished.
+A40=core.account_data_jobs | B40=8 | C40=export_object_key | D40=TEXT | E40=No | F40=NULL | H40=Storage key or NULL | I40=Export file location. | J40=exports/u123.zip | K40=Export jobs only.
+A41=core.account_data_jobs | B41=9 | C41=export_expires_at | D41=TIMESTAMPTZ | E41=No | F41=NULL | H41=Date-time or empty | I41=When the export file expires. | K41=Export jobs only.
+A42=core.account_data_jobs | B42=10 | C42=attempt_count | D42=INT | E42=Yes | F42=0 | H42=>= 0 | I42=Processing attempts. | J42=0 | K42=CHECK >= 0.
+A43=core.account_data_jobs | B43=11 | C43=error_code | D43=VARCHAR(100) | E43=No | F43=NULL | H43=Error code or NULL | I43=Why it failed.
+A44=core.account_data_jobs | B44=12 | C44=execute_after | D44=TIMESTAMPTZ | E44=No | F44=NULL | H44=Date-time or empty | I44=Earliest run / retry time.
+A45=core.account_data_jobs | B45=13 | C45=idempotency_key | D45=VARCHAR(255) | E45=No | F45=NULL | G45=UNIQUE with job_type | H45=Key or NULL | I45=Prevents duplicate requests. | J45=del:fcba728f
+A46=core.account_data_jobs | B46=14 | C46=lease_expires_at | D46=TIMESTAMPTZ | E46=No | F46=NULL | H46=Date-time or empty | I46=Lease end.
+A47=core.account_data_jobs | B47=15 | C47=worker_id | D47=VARCHAR(100) | E47=No | F47=NULL | H47=Worker name or NULL | I47=Worker handling the job. | J47=worker-2
+A48=core.account_data_jobs | B48=16 | C48=lease_token | D48=UUID | E48=No | F48=NULL | H48=UUID or NULL | I48=Lease token.
+A49=core.account_data_jobs | B49=17 | C49=updated_at | D49=TIMESTAMPTZ | E49=Yes | F49=NOW() | H49=Date-time | I49=Last change. | K49=Set by trigger. | L49=New
+A50=core.account_data_job_steps | B50=1 | C50=id | D50=BIGINT identity | E50=Yes | F50=auto | G50=PK | H50=1, 2, 3 ... | I50=Unique step ID. | J50=1 | K50=Generated always.
+A51=core.account_data_job_steps | B51=2 | C51=job_id | D51=BIGINT | E51=Yes | G51=FK | H51=FK -> core.account_data_jobs(id) | I51=Parent job. | J51=1 | K51=ON DELETE RESTRICT.
+A52=core.account_data_job_steps | B52=3 | C52=step_code | D52=VARCHAR(100) | E52=Yes | G52=UNIQUE with job_id | H52=e.g. collect_profile, remove_posts, delete_contacts, delete_media | I52=Step name. | J52=delete_media | K52=Deletion steps must include identity steps (contacts, OTP, DOB).
+A53=core.account_data_job_steps | B53=4 | C53=status | D53=VARCHAR(30) | E53=Yes | F53='pending' | H53=pending, processing, succeeded, retryable_failure, terminal_failure, skipped_by_policy | I53=Step state. | J53=succeeded | K53=Named CHECK.
+A54=core.account_data_job_steps | B54=5 | C54=attempt_count | D54=INT | E54=Yes | F54=0 | H54=>= 0 | I54=Attempts. | J54=1 | K54=CHECK >= 0.
+A55=core.account_data_job_steps | B55=6 | C55=next_attempt_at | D55=TIMESTAMPTZ | E55=No | F55=NULL | H55=Date-time or empty | I55=When to retry.
+A56=core.account_data_job_steps | B56=7 | C56=lease_token | D56=UUID | E56=No | F56=NULL | H56=UUID or NULL | I56=Claim token.
+A57=core.account_data_job_steps | B57=8 | C57=lease_expires_at | D57=TIMESTAMPTZ | E57=No | F57=NULL | H57=Date-time or empty | I57=Lease end.
+A58=core.account_data_job_steps | B58=9 | C58=last_error_code | D58=VARCHAR(100) | E58=No | F58=NULL | H58=Error code or NULL | I58=Latest error.
+A59=core.account_data_job_steps | B59=10 | C59=started_at | D59=TIMESTAMPTZ | E59=No | F59=NULL | H59=Date-time or empty | I59=When started.
+A60=core.account_data_job_steps | B60=11 | C60=completed_at | D60=TIMESTAMPTZ | E60=No | F60=NULL | H60=Date-time or empty | I60=When finished.
+A61=core.account_data_job_steps | B61=12 | C61=updated_at | D61=TIMESTAMPTZ | E61=Yes | F61=NOW() | H61=Date-time | I61=Last change.
+A62=core.media_deletion_jobs | B62=1 | C62=id | D62=BIGINT identity | E62=Yes | F62=auto | G62=PK | H62=1, 2, 3 ... | I62=Unique deletion-job ID. | J62=1 | K62=Generated always.
+A63=core.media_deletion_jobs | B63=2 | C63=profile_media_id | D63=BIGINT | E63=No | F63=NULL | G63=FK | H63=FK -> core.profile_media(id) ON DELETE SET NULL | I63=Media record to delete. | J63=1 | K63=Job keeps object_key after the media row is gone.
+A64=core.media_deletion_jobs | B64=3 | C64=object_key | D64=TEXT | E64=Yes | H64=Storage key | I64=File to delete in storage. | J64=media/2026/11/u123/p1.jpg
+A65=core.media_deletion_jobs | B65=4 | C65=status | D65=VARCHAR(30) | E65=Yes | F65='pending' | H65=pending, processing, completed, retry_wait, dead_letter | I65=Job state. | J65=completed | K65=Named CHECK. | L65=Modified: named CHECK added
+A66=core.media_deletion_jobs | B66=5 | C66=attempt_count | D66=INT | E66=Yes | F66=0 | H66=>= 0 | I66=Attempts. | J66=1 | K66=CHECK >= 0.
+A67=core.media_deletion_jobs | B67=6 | C67=next_attempt_at | D67=TIMESTAMPTZ | E67=No | F67=NULL | H67=Date-time or empty | I67=Next try.
+A68=core.media_deletion_jobs | B68=7 | C68=lease_expires_at | D68=TIMESTAMPTZ | E68=No | F68=NULL | H68=Date-time or empty | I68=Lease end.
+A69=core.media_deletion_jobs | B69=8 | C69=last_error_code | D69=VARCHAR(100) | E69=No | F69=NULL | H69=Error code or NULL | I69=Latest error.
+A70=core.media_deletion_jobs | B70=9 | C70=created_at | D70=TIMESTAMPTZ | E70=Yes | F70=NOW() | H70=Date-time | I70=When created.
+A71=core.media_deletion_jobs | B71=10 | C71=completed_at | D71=TIMESTAMPTZ | E71=No | F71=NULL | H71=Date-time or empty | I71=When completed.
+A72=core.media_deletion_jobs | B72=11 | C72=lease_owner | D72=VARCHAR(100) | E72=No | F72=NULL | H72=Worker name or NULL | I72=Worker processing. | J72=worker-3
+A73=core.media_deletion_jobs | B73=12 | C73=lease_token | D73=UUID | E73=No | F73=NULL | H73=UUID or NULL | I73=Lease token.
+A74=core.media_deletion_jobs | B74=13 | C74=dead_lettered_at | D74=TIMESTAMPTZ | E74=No | F74=NULL | H74=Date-time or empty | I74=When dead-lettered.
+A75=core.media_deletion_jobs | B75=14 | C75=updated_at | D75=TIMESTAMPTZ | E75=Yes | F75=NOW() | H75=Date-time | I75=Last change. | K75=Set by trigger. | L75=New
+
+SHEET: Value Lists [state=]
+A1=Value lists - table > column > allowed values
+A4=Column | B4=Value / format | C4=Meaning | D4=When / notes | E4=Change
+A5=core.notifications   |   11 columns (2 with fixed value lists)   |   In-app notifications for a user. | E5=Modified
+A6=id | B6=BIGINT identity  |  required | C6=Unique notification ID. | D6=Free format
+A7=↳ | B7=1, 2, 3 ... | C7=Example: 1 | D7=Generated always.
+A8=recipient_user_id | B8=UUID  |  required | C8=User receiving the notification. | D8=Free format | E8=Modified: BIGINT -> UUID users(user_id)
+A9=↳ | B9=FK -> core.users(user_id) ON DELETE RESTRICT | C9=Example: fcba728f-... | D9=Worker checks users.account_status before create / send.
+A10=notification_type | B10=VARCHAR(50)  |  required | C10=Type of notification. | D10=24 allowed values | E10=Modified: fixed list (was examples)
+A11=↳ | B11=new_follower | C11=Someone starts following the user. | E11=New list
+A12=↳ | B12=follow_request | C12=Someone sends a follow request. | E12=New list
+A13=↳ | B13=follow_request_accepted | C13=Your follow request is accepted. | E13=New list
+A14=↳ | B14=new_like | C14=Someone likes your post. | E14=New list
+A15=↳ | B15=new_comment | C15=Someone comments on your post. | E15=New list
+A16=↳ | B16=comment_reply | C16=Someone replies to your comment. | E16=New list
+A17=↳ | B17=new_mention | C17=Someone mentions you in a post or comment. | E17=New list
+A18=↳ | B18=new_message | C18=You receive a new message. | E18=New list
+A19=↳ | B19=connection_request | C19=Someone sends you a connection request. | E19=New list
+A20=↳ | B20=connection_accepted | C20=Your connection request is accepted. | E20=New list
+A21=↳ | B21=post_shared | C21=Someone shares your post. | E21=New list
+A22=↳ | B22=post_tagged | C22=Someone tags you in a post. | E22=New list
+A23=↳ | B23=story_mention | C23=Someone mentions you in a story. | E23=New list
+A24=↳ | B24=experience_acknowledged | C24=Someone acknowledges your shared experience. | E24=New list
+A25=↳ | B25=related_experience | C25=Someone shares an experience related to yours. | E25=New list
+A26=↳ | B26=experience_supported | C26=Someone shows support for your experience. | E26=New list
+A27=↳ | B27=experience_reacted | C27=Someone reacts to your experience. | E27=New list
+A28=↳ | B28=experience_approved | C28=An authorized reviewer approves your experience. | E28=New list
+A29=↳ | B29=experience_rejected | C29=An authorized reviewer rejects your experience. | E29=New list
+A30=↳ | B30=experience_recommended | C30=The system recommends an experience to you. | E30=New list
+A31=↳ | B31=experience_trending | C31=An experience becomes popular or trending. | E31=New list
+A32=↳ | B32=connection_removed | C32=Someone removes an existing connection. | E32=New list
+A33=↳ | B33=group_invitation | C33=Someone invites you to join a group. | E33=New list
+A34=↳ | B34=account_warning | C34=You receive a warning related to your account. | E34=New list
+A35=↳ | B35=post_saved | C35=Someone saved your post | E35=New list
+A36=↳ | B36=comment_liked | C36=Someone liked your comment | E36=New list
+A37=↳ | B37=story_reply | C37=Someone replied to your story | E37=New list
+A38=↳ | B38=story_reaction | C38=Someone reacted to your story | E38=New list
+A39=↳ | B39=post_edited | C39=A post you interacted with was edited | E39=New list
+A40=↳ | B40=comment_mentioned | C40=Someone mentioned you in a comment | E40=New list
+A41=↳ | B41=message_reaction | C41=Someone reacted to your message | E41=New list
+A42=↳ | B42=message_request | C42=Someone sent you a message request | E42=New list
+A43=↳ | B43=group_member_added | C43=Someone added you to a group | E43=New list
+A44=↳ | B44=security_login_alert | C44=A new or unusual login was detected | E44=New list
+A45=↳ | B45=post_pinned | C45=Someone pinned your post | E45=New list
+A46=↳ | B46=post_unpinned | C46=Someone removed a pinned post | E46=New list
+A47=↳ | B47=comment_edited | C47=Someone edited a comment on your post | E47=New list
+A48=↳ | B48=profile_mentioned | C48=Someone mentions your profile.
+A49=↳ | B49=group_member_left | C49=A member leaves your group.
+A50=↳ | B50=account_verified | C50=Your account is successfully verified.
+A51=↳ | B51=group_member_joined | C51=A new member joins your group.
+A52=↳ | B52=message_request | C52=Someone sends you a message request.
+A53=↳ | B53=story_reacted | C53=Someone reacts to your story.
+A54=↳ | B54=story_replied | C54=Someone replies to your story.
+A55=↳ | B55=new_post | C55=A user you follow creates a new post.
+A56=↳ | B56=post_edited | C56=A post you interacted with has been edited.
+A57=↳ | B57=post_deleted | C57=A post you interacted with has been deleted.
+A58=↳ | B58=comment_liked | C58=Someone likes your comment.
+A59=↳ | B59=comment_mentioned | C59=Someone mentions you in a comment.
+A60=↳ | B60=comment_deleted | C60=Someone deleted a comment on your post | E60=New list
+A61=↳ | B61=account_login_alert | C61=A new login to your account is detected.
+A62=↳ | B62=password_changed | C62=Your account password has been changed.
+A63=↳ | B63=new_follower_milestone | C63=You reach a follower milestone.
+A64=dedupe_key | B64=VARCHAR(255)  |  optional | C64=Prevents duplicate notifications. | D64=Free format
+A65=↳ | B65=Any key, or NULL | C65=Example: like:post101:actor2 | D65=Unique with recipient_user_id when supplied.
+A66=source_event_id | B66=BIGINT  |  optional | C66=Event that caused the notification. | D66=Free format | E66=Modified: FK added (was 'no FK')
+A67=↳ | B67=FK -> core.outbox_events(id) ON DELETE RESTRICT | C67=Example: 101 | D67=NULL allowed until linked.
+A68=payload | B68=JSONB  |  required | C68=Details for building the message. | D68=Free format | E68=Modified: IDs only (example had a name)
+A69=↳ | B69=IDs only, e.g. {"actor_user_id":"..","post_id":101} | C69=Example: {"post_id":101} | D69=No names or personal text; message text built when displayed (base SEC-008).
+A70=status | B70=VARCHAR(20)  |  required | C70=Notification state. | D70=5 allowed values | E70=Modified: named CHECK added
+A71=↳ | B71=queued | C71=Created, not delivered yet (default).
+A72=↳ | B72=delivered | C72=Shown to the user.
+A73=↳ | B73=read | C73=User opened it.
+A74=↳ | B74=suppressed | C74=Not sent (preference off / user blocked / account not active).
+A75=↳ | B75=failed | C75=Could not deliver.
+A76=created_at | B76=TIMESTAMPTZ  |  required | C76=When created. | D76=Free format
+A77=↳ | B77=Date-time | C77=Example: 2026-11-05 10:00+05:30
+A78=delivered_at | B78=TIMESTAMPTZ  |  optional | C78=When delivered. | D78=Free format
+A79=↳ | B79=Date-time or empty | C79=Example: 2026-11-05 10:00+05:30 | D79=NULL until delivered.
+A80=read_at | B80=TIMESTAMPTZ  |  optional | C80=When read. | D80=Free format
+A81=↳ | B81=Date-time or empty | C81=Example: 2026-11-05 10:05+05:30 | D81=NULL until read.
+A82=updated_at | B82=TIMESTAMPTZ  |  required | C82=Last change. | D82=Free format | E82=New
+A83=↳ | B83=Date-time | C83=Example: 2026-11-05 10:05+05:30 | D83=Set by trigger.
+A85=core.outbox_events   |   17 columns (1 with fixed value lists)   |   Events waiting to be processed (outbox pattern with worker leases). | E85=Modified
+A86=id | B86=BIGINT identity  |  required | C86=Unique event ID. | D86=Free format
+A87=↳ | B87=1, 2, 3 ... | C87=Example: 1 | D87=Generated always.
+A88=aggregate_type | B88=VARCHAR(50)  |  required | C88=Type of entity involved. | D88=Free format
+A89=↳ | B89=post | C89=Event related to a post.
+A90=↳ | B90=user | C90=Event related to a user.
+A91=↳ | B91=comment | C91=Comment on a post
+A92=↳ | B92=media | C92=Event related to a comment.
+A93=↳ | B93=connection | C93=User connection or follow relationship
+A94=↳ | B94=account | C94=Account-related operation
+A95=aggregate_id | B95=TEXT  |  required | C95=ID of the related entity. | D95=Free format | E95=Modified: BIGINT -> TEXT
+A96=↳ | B96=ID of the entity as text (number or UUID) | C96=Example: 101 / fcba728f-... | D96=Text so it can hold UUID user IDs.
+A97=aggregate_sequence | B97=BIGINT  |  required | C97=Event order for that entity. | D97=Free format
+A98=↳ | B98=1, 2, 3 ... | C98=Example: 3
+A99=event_type | B99=VARCHAR(100)  |  required | C99=Name of the event. | D99=Free format
+A100=↳ | B100=user.created | C100=A new user account is created
+A101=↳ | B101=post.created | C101=A new post is created
+A102=↳ | B102=post.liked | C102=A post receives a like
+A103=↳ | B103=comment.created | C103=A new comment is added
+A104=↳ | B104=media.uploaded | C104=A media file is uploaded
+A105=↳ | B105=experience.created | C105=A new experience is shared
+A106=↳ | B106=account.export_requested | C106=A user requests their data export
+A107=↳ | B107=account.deletion_requested | C107=A user requests account deletion
+A108=payload | B108=JSONB  |  required | C108=Details for processing. | D108=Free format
+A109=↳ | B109=IDs only | C109=Example: {"post_id":101} | D109=No personal text.
+A110=created_at | B110=TIMESTAMPTZ  |  required | C110=When created. | D110=Free format
+A111=↳ | B111=Date-time | C111=Example: 2026-11-05 10:00+05:30
+A112=published_at | B112=TIMESTAMPTZ  |  optional | C112=When published. | D112=Free format | E112=Modified: linked to new 'published' status
+A113=↳ | B113=Date-time or empty | C113=Example: 2026-11-05 10:00+05:30 | D113=Filled when status = published.
+A114=status | B114=VARCHAR(20)  |  required | C114=Processing state. | D114=4 allowed values | E114=Modified: 'published' added + named CHECK
+A115=↳ | B115=pending | C115=Waiting (default).
+A116=↳ | B116=processing | C116=A worker holds the lease.
+A117=↳ | B117=published | C117=Processed successfully. | D117=published_at filled | E117=New value
+A118=↳ | B118=dead_letter | C118=Gave up after retries. | D118=dead_lettered_at filled
+A119=attempt_count | B119=INT  |  required | C119=Processing attempts. | D119=Free format
+A120=↳ | B120=>= 0 | C120=Example: 1 | D120=CHECK >= 0.
+A121=next_attempt_at | B121=TIMESTAMPTZ  |  optional | C121=When to retry. | D121=Free format
+A122=↳ | B122=Date-time or empty | C122=Example: 2026-11-05 10:05+05:30
+A123=last_error_code | B123=VARCHAR(100)  |  optional | C123=Latest error. | D123=Free format
+A124=↳ | B124=Error code or NULL | C124=Example: TIMEOUT
+A125=event_key | B125=VARCHAR(255)  |  required | C125=Prevents duplicate events. | D125=Free format
+A126=↳ | B126=Unique key | C126=Example: post101:like:actor2
+A127=lease_token | B127=UUID  |  optional | C127=Worker's claim token. | D127=Free format
+A128=↳ | B128=UUID or NULL | C128=Example: 9b2e... | D128=NULL when no active lease.
+A129=dead_lettered_at | B129=TIMESTAMPTZ  |  optional | C129=When moved to dead_letter. | D129=Free format
+A130=↳ | B130=Date-time or empty | D130=NULL unless dead_letter.
+A131=lease_owner | B131=VARCHAR(100)  |  optional | C131=Worker processing the event. | D131=Free format
+A132=↳ | B132=Worker name or NULL | C132=Example: worker-1
+A133=lease_expires_at | B133=TIMESTAMPTZ  |  optional | C133=When the lease ends. | D133=Free format
+A134=↳ | B134=Date-time or empty
+A136=core.account_data_jobs   |   17 columns (2 with fixed value lists)   |   Export / deletion jobs for a user's data. | E136=Modified
+A137=id | B137=BIGINT identity  |  required | C137=Unique job ID. | D137=Free format
+A138=↳ | B138=1, 2, 3 ... | C138=Example: 1 | D138=Generated always.
+A139=user_id | B139=UUID  |  required | C139=Whose data is handled. | D139=Free format | E139=Modified: BIGINT nullable SET NULL -> UUID required RESTRICT
+A140=↳ | B140=FK -> core.users(user_id) ON DELETE RESTRICT | C140=Example: fcba728f-... | D140=Users are kept as tombstones, so RESTRICT is safe and the job never loses its user.
+A141=job_type | B141=VARCHAR(20)  |  required | C141=Requested operation. | D141=2 allowed values | E141=Modified: named CHECK + link to identity deletion flow
+A142=↳ | B142=export | C142=User asked for a copy of their data.
+A143=↳ | B143=deletion | C143=Erase the user's data (created when identity grace period ends).
+A144=status | B144=VARCHAR(20)  |  required | C144=Job state. | D144=5 allowed values | E144=Modified: named CHECK added
+A145=↳ | B145=queued | C145=Waiting (default).
+A146=↳ | B146=processing | C146=Running.
+A147=↳ | B147=completed | C147=Finished.
+A148=↳ | B148=failed | C148=Failed.
+A149=↳ | B149=cancelled | C149=Cancelled (e.g. user cancelled deletion).
+A150=requested_at | B150=TIMESTAMPTZ  |  required | C150=When requested. | D150=Free format
+A151=↳ | B151=Date-time | C151=Example: 2026-11-05 02:00+05:30
+A152=started_at | B152=TIMESTAMPTZ  |  optional | C152=When processing began. | D152=Free format
+A153=↳ | B153=Date-time or empty
+A154=completed_at | B154=TIMESTAMPTZ  |  optional | C154=When finished. | D154=Free format
+A155=↳ | B155=Date-time or empty
+A156=export_object_key | B156=TEXT  |  optional | C156=Export file location. | D156=Free format
+A157=↳ | B157=Storage key or NULL | C157=Example: exports/u123.zip | D157=Export jobs only.
+A158=export_expires_at | B158=TIMESTAMPTZ  |  optional | C158=When the export file expires. | D158=Free format
+A159=↳ | B159=Date-time or empty | D159=Export jobs only.
+A160=attempt_count | B160=INT  |  required | C160=Processing attempts. | D160=Free format
+A161=↳ | B161=>= 0 | C161=Example: 0 | D161=CHECK >= 0.
+A162=error_code | B162=VARCHAR(100)  |  optional | C162=Why it failed. | D162=Free format
+A163=↳ | B163=Connection Error | C163=Unable to connect to the database
+A164=↳ | B164=Permission Error | C164=User doesn't have required access
+A165=↳ | B165=Data Type Error | C165=Incorrect data type is provided
+A166=↳ | B166=Constraint Error | C166=Data violates a table rule
+A167=execute_after | B167=TIMESTAMPTZ  |  optional | C167=Earliest run / retry time. | D167=Free format
+A168=↳ | B168=Date-time or empty
+A169=idempotency_key | B169=VARCHAR(255)  |  optional | C169=Prevents duplicate requests. | D169=Free format
+A170=↳ | B170=Key or NULL | C170=Example: del:fcba728f
+A171=lease_expires_at | B171=TIMESTAMPTZ  |  optional | C171=Lease end. | D171=Free format
+A172=↳ | B172=Date-time or empty
+A173=worker_id | B173=VARCHAR(100)  |  optional | C173=Worker handling the job. | D173=Free format
+A174=↳ | B174=Worker name or NULL | C174=Example: worker-2
+A175=lease_token | B175=UUID  |  optional | C175=Lease token. | D175=Free format
+A176=↳ | B176=UUID or NULL
+A177=updated_at | B177=TIMESTAMPTZ  |  required | C177=Last change. | D177=Free format | E177=New
+A178=↳ | B178=Date-time | D178=Set by trigger.
+A180=core.account_data_job_steps   |   12 columns (1 with fixed value lists)   |   Steps inside an export / deletion job.
+A181=id | B181=BIGINT identity  |  required | C181=Unique step ID. | D181=Free format
+A182=↳ | B182=1, 2, 3 ... | C182=Example: 1 | D182=Generated always.
+A183=job_id | B183=BIGINT  |  required | C183=Parent job. | D183=Free format
+B184=FK -> core.account_data_jobs(id) | C184=Example: 1 | D184=ON DELETE RESTRICT.
+A185=step_code | B185=VARCHAR(100)  |  required | C185=Step name. | D185=Free format
+A186=↳ | B186=collect_user_profile | C186=Collect user profile information.
+A187=↳ | B187=collect_posts | C187=Collect user's posts.
+A188=↳ | B188=collect_comments | C188=Collect user's comments.
+A189=↳ | B189=collect_connections | C189=Collect user's connections.
+A190=↳ | B190=collect_messages | C190=Collect user's messages.
+A191=↳ | B191=collect_media | C191=Collect user's media files.
+A192=↳ | B192=delete_user_profile | C192=Delete user profile information.
+A193=↳ | B193=delete_posts | C193=Delete user's posts.
+A194=↳ | B194=delete_comments | C194=Delete user's comments.
+A195=↳ | B195=delete_connections | C195=Delete user's connections.
+A196=↳ | B196=delete_messages | C196=Delete user's messages.
+A197=↳ | B197=delete_media | C197=Delete user's media files.
+A198=↳ | B198=verify_deletion | C198=Verify that deletion is completed.
+A199=status | B199=VARCHAR(30)  |  required | C199=Step state. | D199=6 allowed values
+A200=↳ | B200=pending | C200=Not started (default).
+A201=↳ | B201=processing | C201=Running.
+A202=↳ | B202=succeeded | C202=Done.
+A203=↳ | B203=retryable_failure | C203=Failed, will retry.
+A204=↳ | B204=terminal_failure | C204=Failed, no retry.
+A205=↳ | B205=skipped_by_policy | C205=Skipped (e.g. legal hold).
+A206=attempt_count | B206=INT  |  required | C206=Attempts. | D206=Free format
+A207=↳ | B207=>= 0 | C207=Example: 1 | D207=CHECK >= 0.
+A208=next_attempt_at | B208=TIMESTAMPTZ  |  optional | C208=When to retry. | D208=Free format
+A209=↳ | B209=Date-time or empty
+A210=lease_token | B210=UUID  |  optional | C210=Claim token. | D210=Free format
+A211=↳ | B211=UUID or NULL
+A212=lease_expires_at | B212=TIMESTAMPTZ  |  optional | C212=Lease end. | D212=Free format
+A213=↳ | B213=Date-time or empty
+A214=last_error_code | B214=VARCHAR(100)  |  optional | C214=Latest error. | D214=Free format
+A215=↳ | B215=Error code or NULL
+A216=started_at | B216=TIMESTAMPTZ  |  optional | C216=When started. | D216=Free format
+A217=↳ | B217=Date-time or empty
+A218=completed_at | B218=TIMESTAMPTZ  |  optional | C218=When finished. | D218=Free format
+A219=↳ | B219=Date-time or empty
+A220=updated_at | B220=TIMESTAMPTZ  |  required | C220=Last change. | D220=Free format
+A221=↳ | B221=Date-time
+A223=core.media_deletion_jobs   |   14 columns (1 with fixed value lists)   |   Jobs that delete media files from storage. | E223=Modified
+A224=id | B224=BIGINT identity  |  required | C224=Unique deletion-job ID. | D224=Free format
+A225=↳ | B225=1, 2, 3 ... | C225=Example: 1 | D225=Generated always.
+A226=profile_media_id | B226=BIGINT  |  optional | C226=Media record to delete. | D226=Free format
+A227=↳ | B227=FK -> core.profile_media(id) ON DELETE SET NULL | C227=Example: 1 | D227=Job keeps object_key after the media row is gone.
+A228=object_key | B228=TEXT  |  required | C228=File to delete in storage. | D228=Free format
+A229=↳ | B229=Storage key | C229=Example: media/2026/11/u123/p1.jpg
+A230=status | B230=VARCHAR(30)  |  required | C230=Job state. | D230=5 allowed values
+A231=↳ | B231=pending | C231=Waiting (default).
+A232=↳ | B232=processing | C232=Running.
+A233=↳ | B233=completed | C233=File deleted.
+A234=↳ | B234=retry_wait | C234=Waiting to retry.
+A235=↳ | B235=dead_letter | C235=Gave up.
+A236=attempt_count | B236=INT  |  required | C236=Attempts. | D236=Free format
+A237=↳ | B237=>= 0 | C237=Example: 1 | D237=CHECK >= 0.
+A238=next_attempt_at | B238=TIMESTAMPTZ  |  optional | C238=Next try. | D238=Free format
+A239=↳ | B239=Date-time or empty
+A240=lease_expires_at | B240=TIMESTAMPTZ  |  optional | C240=Lease end. | D240=Free format
+A241=↳ | B241=Date-time or empty
+A242=last_error_code | B242=VARCHAR(100)  |  optional | C242=Latest error. | D242=Free format
+A243=↳ | B243=STORAGE_ERROR | C243=Problem with file storage.
+A244=↳ | B244=NETWORK_ERROR | C244=Internet or network problem.
+A245=↳ | B245=TIMEOUT | C245=Operation took too long.
+A246=↳ | B246=FILE_NOT_FOUND | C246=File could not be found.
+A247=↳ | B247=Error code or NULL
+A248=created_at | B248=TIMESTAMPTZ  |  required | C248=When created. | D248=Free format
+A249=↳ | B249=Date-time
+A250=completed_at | B250=TIMESTAMPTZ  |  optional | C250=When completed. | D250=Free format
+A251=↳ | B251=Date-time or empty
+A252=lease_owner | B252=VARCHAR(100)  |  optional | C252=Worker processing. | D252=Free format
+A253=↳ | B253=Worker name or NULL | C253=Example: worker-3
+A254=lease_token | B254=UUID  |  optional | C254=Lease token. | D254=Free format
+A255=↳ | B255=UUID or NULL
+A256=dead_lettered_at | B256=TIMESTAMPTZ  |  optional | C256=When dead-lettered. | D256=Free format
+A257=↳ | B257=Date-time or empty
+A258=updated_at | B258=TIMESTAMPTZ  |  required | C258=Last change. | D258=Free format
+A259=↳ | B259=Date-time | D259=Set by trigger.
+
+SHEET: Relationships [state=]
+A1=Relationships (foreign keys)
+A2=User links point to core.users(user_id) (Aditya). media_deletion_jobs links to core.profile_media (Prajwal).
+A4=Child table | B4=Column | C4=Parent table | D4=Parent column | E4=On delete | F4=Change
+A5=core.notifications | B5=recipient_user_id | C5=core.users | D5=user_id | E5=RESTRICT | F5=Modified: was BIGINT -> users(id)
+A6=core.notifications | B6=source_event_id | C6=core.outbox_events | D6=id | E6=RESTRICT | F6=New FK
+A7=core.account_data_jobs | B7=user_id | C7=core.users | D7=user_id | E7=RESTRICT | F7=Modified: was BIGINT nullable, SET NULL
+A8=core.account_data_job_steps | B8=job_id | C8=core.account_data_jobs | D8=id | E8=RESTRICT
+A9=core.media_deletion_jobs | B9=profile_media_id | C9=core.profile_media (Prajwal) | D9=id | E9=SET NULL
+
+SHEET: Open Items [state=]
+A1=Open items
+A2=To settle with the tech lead / mentor.
+A4=# | B4=Area | C4=Item | D4=Owner | E4=Status
+A5=1 | B5=Question | C5=Tech lead confirms: every table links to core.users(user_id) UUID. | D5=Tech lead | E5=Open
+A6=2 | B6=Question | C6=Are the 5 helper tables (attempts / logs) part of Koushik's scope? Not in the allocation. | D6=Mentor | E6=Open
+A7=3 | B7=Question | C7=Keep VARCHAR(n) or move to TEXT + CHECK like the identity tables? | D7=Team | E7=Open
+A8=4 | B8=Process | C8=Verify these definitions against the live database (pgAdmin edits). | D8=Koushik | E8=Open
+A9=5 | B9=Process | C9=Deletion flow: identity grace_period_ended creates the account_data_jobs deletion job; steps include delete_contacts, clear_otp, purge_profile, delete_media. | D9=Koushik + Aditya | E9=Open
+A10=6 | B10=Dependency | C10=media_deletion_jobs.profile_media_id points to Prajwal's core.profile_media - agree its key type (BIGINT id) with Prajwal. | D10=Koushik + Prajwal | E10=Open

@@ -1,0 +1,458 @@
+﻿SOURCE: Rajath_Value-List.xlsx
+
+SHEET: Read Me [state=]
+A1=Data Dictionary - Rajath H (6 tables)
+A2=Schema: core - prepared 05 Nov 2026 from 'DB-Tables-2.xlsx' (KINDA column value guide) with review fixes applied
+A4=What this is | B4=Every table, column and allowed value of Rajath H's 6 tables: the 5 allocated (discovery_dismissals, acknowledgements, conversations, messages, message_read_cursors) + conversation_participants, which he added for group chat. Other members' tables are not included.
+A5=YELLOW rows | B5=New or modified compared with the original workbook. The 'Change' column says exactly what changed. Removed items are listed in 'What Changed'.
+A6=How to read it | B6=Tables -> Data Dictionary (every column) -> Value Lists (table > column > values) -> Relationships.
+A7=Link to users | B7=Every user reference is <column> UUID REFERENCES core.users(user_id) ON DELETE RESTRICT. core.users belongs to the identity team.
+A8=Common rules | B8=ON DELETE RESTRICT everywhere. Data types, required and defaults were not in the original sheet - they are proposed (confirm with the SQL). Status lists are named CHECKs.
+A9=Key words | B9=PK = primary key. FK = link to another table. UNIQUE = no duplicates. CHECK = rule the database enforces.
+
+SHEET: What Changed [state=]
+A1=What changed from the original workbook
+A2=Review fixes applied in this dictionary.
+A4=Type | B4=Item | C4=What changed
+A5=Scope | B5=Rajath's 6 tables | C5=5 allocated (discovery_dismissals, acknowledgements, conversations, messages, message_read_cursors) + conversation_participants (his addition).
+A6=Added | B6=core.conversation_participants (his addition) | C6=10 columns: his 9 + removed_by_user_id. Not in the allocation - included because he designed it for group chat. Rules: one active membership per user, one active owner per group, left_at required when not active, banned cannot be re-added, direct chat = exactly 2 members.
+A7=Modified | B7=messages.sender_user_id / message_read_cursors.user_id | C7=Must be an active row in conversation_participants (replaces 'member of the conversation' check).
+A8=Modified | B8=discovery_dismissals.reason_code | C8=11 -> 49 codes (his update). Row 'Other specific reason' has no code; political_disagreement / belief_difference flagged as sensitive; 4 near-duplicates flagged; safety reasons also open a report.
+A9=Modified | B9=discovery_dismissals.category_code | C9=8 -> 30 codes (his update). Only 6 match core.interests categories (Thanushree).
+A10=Modified | B10=acknowledgements.acknowledgement_type | C10=Replaced by category (10) + subcategory (80) with a pair CHECK (his update). One column name: subcategory (he also wrote subcategory_code).
+A11=Added | B11=Data type / Required / Default / Key | C11=Not in his workbook - proposed here from the base file and team rules; to be confirmed against his SQL.
+A12=Modified | B12=All user columns (7) | C12=UUID, FK -> core.users(user_id) ON DELETE RESTRICT.
+A13=Modified | B13=Self-actions | C13=CHECK viewer <> candidate (dismissals) and actor <> target (acknowledgements).
+A14=Modified | B14=acknowledgements.status | C14=Adds hidden, expired (base file).
+A15=Modified | B15=messages.status | C15=sent, hidden, removed, quarantined (base file) - was only 'sent'.
+A16=Modified | B16=messages.client_message_id | C16=VARCHAR(64) NOT NULL, UNIQUE per sender (was 'depends on type').
+A17=Modified | B17=messages.content / deleted_at | C17=Text max 2000 chars; removed messages scrubbed and deleted_at filled.
+A18=Modified | B18=messages.public_id | C18=Always present UUID (was 'if implemented').
+A19=Modified | B19=Read cursors | C19=PK (conversation_id, user_id); composite FK to messages; server-set last_read_at.
+A20=Flagged | B20=conversations type 'group', status archived / blocked; media message types | C20=Need mentor / product approval.
+
+SHEET: Tables [state=]
+A1=Tables overview
+A2=Rajath's 6 tables. 'Columns' counted live from the Data Dictionary sheet.
+A4=# | B4=Table | C4=What it stores | D4=One row means | E4=Columns | F4=Change
+A5=1 | B5=core.discovery_dismissals | C5=Profiles a user hides from discovery (temporary 30 days, everywhere, or in one category). | D5=One row per dismissal | E5=10 | F5=Modified: user IDs UUID; viewer <> candidate; one active dismissal rule; 49 reasons + 30 categories from his update
+A6=2 | B6=core.acknowledgements | C6=Positive / supportive acknowledgements sent from one user to another. | D6=One row per acknowledgement | E6=9 | F6=Modified: user IDs UUID; type split into category (10) + subcategory (80) as in his update; status adds hidden, expired (base); idempotency per actor
+A7=3 | B7=core.conversations | C7=Chat conversations (direct; group needs approval). | D7=One row per conversation | E7=8 | F7=Modified: connection link rules; status values reviewed; closed_at rule
+A8=4 | B8=core.messages | C8=Messages inside a conversation. | D8=One row per message | E8=13 | F8=Modified: sender UUID; status values (base); client_message_id defined; removal scrub rule; reply in same conversation
+A9=5 | B9=core.message_read_cursors | C9=Latest read position of each user in each conversation. | D9=One row per user per conversation | E9=4 | F9=Modified: user_id UUID; composite PK + FK; server-set time
+A10=6 | B10=core.conversation_participants | C10=Users who belong to a conversation, with their role and membership status. | D10=One row per membership (re-joining makes a new row) | E10=10 | F10=New table (his addition for group chat, not in the allocation): user IDs UUID; one active membership; one active owner; direct = exactly 2 members
+D11=Total columns | E11=54
+
+SHEET: Data Dictionary [state=]
+A1=Data dictionary - every column
+A2=Filter by Table. Yellow = new or modified.
+A4=Table | B4=# | C4=Column | D4=Data type | E4=Required | F4=Default | G4=Key | H4=Possible values | I4=Meaning | J4=Example | K4=Rules | L4=Change
+A5=core.discovery_dismissals | B5=1 | C5=id | D5=BIGINT identity | E5=Yes | F5=auto | G5=PK | H5=Automatically generated positive whole number | I5=Unique ID for this dismissal. | J5=1 | K5=Generated always.
+A6=core.discovery_dismissals | B6=2 | C6=viewer_user_id | D6=UUID | E6=Yes | G6=FK | H6=FK -> core.users(user_id) ON DELETE RESTRICT | I6=User who dismisses the candidate. | J6=fcba728f-... | K6=Team rule: user links are UUID to users.user_id. | L6=Modified: type UUID -> core.users(user_id)
+A7=core.discovery_dismissals | B7=3 | C7=candidate_user_id | D7=UUID | E7=Yes | G7=FK | H7=FK -> core.users(user_id) ON DELETE RESTRICT | I7=Profile being dismissed. | J7=6be8fb9a-... | K7=CHECK viewer_user_id <> candidate_user_id. | L7=Modified: type UUID + cannot dismiss yourself
+A8=core.discovery_dismissals | B8=4 | C8=scope | D8=VARCHAR(20) | E8=Yes | F8='all' | H8=temporary, all, category | I8=How broadly the candidate is hidden. | J8=temporary | K8=Named CHECK. Default 'all' as in base file. | L8=Modified: default 'all' added
+A9=core.discovery_dismissals | B9=5 | C9=reason_code | D9=VARCHAR(40) | E9=No | F9=NULL | H9=49 values - see Value Lists | I9=Why the profile was dismissed. | J9=not_interested | K9=Named CHECK; optional. His sheet says 50, but one row ('Other specific reason') has no code - same as other. Safety reasons (harassment, underage_concern ...) also open a report in safety.reports (Tejaswini). | L9=Modified: 49 codes; 1 blank code; safety reasons -> report
+A10=core.discovery_dismissals | B10=6 | C10=created_at | D10=TIMESTAMPTZ | E10=Yes | F10=NOW() | H10=Date and time | I10=When the dismissal was created. | J10=2026-11-05 10:00+05:30
+A11=core.discovery_dismissals | B11=7 | C11=expires_at | D11=TIMESTAMPTZ | E11=No | F11=NULL | H11=Date and time; NULL for all / category | I11=Temporary dismissal expiry. | J11=2026-12-05 10:00+05:30 | K11=Trigger sets exactly created_at + 30 days for temporary; CHECK: NULL for all / category.
+A12=core.discovery_dismissals | B12=8 | C12=category_code | D12=VARCHAR(30) | E12=No | F12=NULL | H12=30 values - see Value Lists; NULL when not applicable | I12=Discovery section in which the candidate is hidden. | J12=music | K12=CHECK: required when scope = 'category', NULL for temporary / all. Only 6 of 30 match Thanushree's 10 interest categories - agree one list. | L12=Modified: 30 codes; mismatch with core.interests flagged
+A13=core.discovery_dismissals | B13=9 | C13=reversed_at | D13=TIMESTAMPTZ | E13=No | F13=NULL | H13=Date and time; NULL while active | I13=When the user reversed the dismissal. | K13=CHECK reversed_at >= created_at. | L13=Modified: time-order rule added
+A14=core.discovery_dismissals | B14=10 | C14=updated_at | D14=TIMESTAMPTZ | E14=Yes | F14=NOW() | H14=Date and time | I14=Last time the record changed. | K14=Set by trigger.
+A15=core.acknowledgements | B15=1 | C15=id | D15=BIGINT identity | E15=Yes | F15=auto | G15=PK | H15=Automatically generated positive whole number | I15=Unique ID for this acknowledgement. | J15=1 | K15=Generated always.
+A16=core.acknowledgements | B16=2 | C16=actor_user_id | D16=UUID | E16=Yes | G16=FK | H16=FK -> core.users(user_id) ON DELETE RESTRICT | I16=User who sends it. | J16=fcba728f-... | L16=Modified: type UUID -> core.users(user_id)
+A17=core.acknowledgements | B17=3 | C17=target_user_id | D17=UUID | E17=Yes | G17=FK | H17=FK -> core.users(user_id) ON DELETE RESTRICT | I17=User receiving it. | J17=6be8fb9a-... | K17=CHECK actor_user_id <> target_user_id. | L17=Modified: type UUID + cannot acknowledge yourself
+A18=core.acknowledgements | B18=4 | C18=category | D18=VARCHAR(40) | E18=Yes | H18=10 values - see Value Lists | I18=Group of the acknowledgement. | J18=gratitude_appreciation | K18=Named CHECK. Replaces acknowledgement_type (his update). | L18=Modified: replaces acknowledgement_type
+A19=core.acknowledgements | B19=5 | C19=subcategory | D19=VARCHAR(40) | E19=Yes | H19=80 values - see Value Lists | I19=Exact acknowledgement sent. | J19=thank_you | K19=CHECK on (category, subcategory) pairs: subcategory must belong to its category. His sheet names it once as subcategory_code - one name: subcategory. | L19=New column (his update) + pair CHECK + one column name
+A20=core.acknowledgements | B20=6 | C20=status | D20=VARCHAR(20) | E20=Yes | F20='active' | H20=active, undone, hidden, expired | I20=Current state. | J20=active | K20=Named CHECK. | L20=Modified: hidden, expired added (base file)
+A21=core.acknowledgements | B21=7 | C21=idempotency_key | D21=VARCHAR(255) | E21=No | F21=NULL | G21=UNIQUE with actor_user_id | H21=Text up to 255 characters, or NULL | I21=Prevents duplicates when a request is retried. | J21=ack-7f3a | K21=UNIQUE (actor_user_id, idempotency_key) when supplied. | L21=Modified: unique per actor (base file)
+A22=core.acknowledgements | B22=8 | C22=created_at | D22=TIMESTAMPTZ | E22=Yes | F22=NOW() | H22=Date and time | I22=When created. | J22=2026-11-05 10:00+05:30
+A23=core.acknowledgements | B23=9 | C23=undone_at | D23=TIMESTAMPTZ | E23=No | F23=NULL | H23=Date and time; NULL if not undone | I23=When it was undone. | K23=Filled exactly when status = 'undone'; >= created_at. | L23=Modified: consistency rule added
+A24=core.conversations | B24=1 | C24=id | D24=BIGINT identity | E24=Yes | F24=auto | G24=PK | H24=Automatically generated positive whole number | I24=Internal conversation ID. | J24=1 | K24=Generated always.
+A25=core.conversations | B25=2 | C25=connection_id | D25=Same type as core.connections.id | E25=Direct: Yes | F25=NULL | G25=FK, UNIQUE | H25=Existing connection (Mahera's core.connections); NULL only for group | I25=Links a direct chat to its accepted connection. | J25=12 | K25=FK ON DELETE RESTRICT; UNIQUE = one conversation per connection; CHECK (type='direct') = (connection_id IS NOT NULL). | L25=Modified: FK + UNIQUE + type rule
+A26=core.conversations | B26=3 | C26=type | D26=VARCHAR(20) | E26=Yes | F26='direct' | H26=direct, group | I26=Conversation kind. | J26=direct | K26=Base file allows only direct; group needs mentor approval. Members are in core.conversation_participants. | L26=Modified: 'group' needs approval
+A27=core.conversations | B27=4 | C27=status | D27=VARCHAR(20) | E27=Yes | F27='active' | H27=active, restricted, closed (archived, blocked under review) | I27=Conversation-wide state. | J27=active | K27=Named CHECK. 'archived' is a per-user choice and 'blocked' comes from Prajwal's core.blocks - review before keeping. | L27=Modified: archived / blocked flagged
+A28=core.conversations | B28=5 | C28=last_message_at | D28=TIMESTAMPTZ | E28=No | F28=NULL | H28=Date and time; NULL until first message | I28=Latest message time (inbox sorting). | J28=2026-11-05 10:05+05:30 | K28=CHECK >= created_at; set by the send routine. | L28=Modified: time-order rule
+A29=core.conversations | B29=6 | C29=created_at | D29=TIMESTAMPTZ | E29=Yes | F29=NOW() | H29=Date and time | I29=When created. | J29=2026-11-05 10:00+05:30
+A30=core.conversations | B30=7 | C30=closed_at | D30=TIMESTAMPTZ | E30=No | F30=NULL | H30=Date and time; NULL if not closed | I30=When closed. | K30=Filled exactly when status = 'closed'; >= created_at. | L30=Modified: consistency rule
+A31=core.conversations | B31=8 | C31=updated_at | D31=TIMESTAMPTZ | E31=Yes | F31=NOW() | H31=Date and time | I31=Last conversation-level update. | K31=Set by trigger.
+A32=core.messages | B32=1 | C32=id | D32=BIGINT identity | E32=Yes | F32=auto | G32=PK; UNIQUE (conversation_id, id) | H32=Automatically generated positive whole number | I32=Internal message ID. | J32=1 | K32=UNIQUE (conversation_id, id) needed by the read-cursor FK. | L32=Modified: extra UNIQUE for cursor FK
+A33=core.messages | B33=2 | C33=conversation_id | D33=BIGINT | E33=Yes | G33=FK | H33=FK -> core.conversations(id) ON DELETE RESTRICT | I33=Conversation receiving the message. | J33=1
+A34=core.messages | B34=3 | C34=conversation_seq | D34=BIGINT | E34=Yes | G34=UNIQUE (conversation_id, conversation_seq) | H34=Positive integer, increasing within a conversation | I34=Stable order within a conversation. | J34=42 | K34=Assigned by the send routine; CHECK > 0. | L34=Modified: UNIQUE + > 0 rule
+A35=core.messages | B35=4 | C35=sender_user_id | D35=UUID | E35=Yes | G35=FK | H35=FK -> core.users(user_id) ON DELETE RESTRICT | I35=User who sent it. | J35=fcba728f-... | K35=Must be an active row in conversation_participants (checked in send routine). | L35=Modified: type UUID -> core.users(user_id)
+A36=core.messages | B36=5 | C36=client_message_id | D36=VARCHAR(64) | E36=Yes | G36=UNIQUE (sender_user_id, client_message_id) | H36=Client-generated ID per send (e.g. UUID), max 64 chars | I36=Stops duplicate messages on network retries. | J36=c-3f9a... | K36=Base file: required + unique per sender. | L36=Modified: type, length and unique rule defined (was 'depends')
+A37=core.messages | B37=6 | C37=message_type | D37=VARCHAR(20) | E37=Yes | F37='text' | H37=text, image, video, document, voice, audio, location, contact, sticker, system | I37=How to read the content. | J37=text | K37=Base file covers text only; media / location / contact types need approval (personal data, storage). | L37=Modified: types beyond text need approval
+A38=core.messages | B38=7 | C38=content | D38=JSONB | E38=Yes | H38=JSON object; text up to 2000 characters; file references only | I38=Message payload / metadata. | J38={"text":"Hi!"} | K38=Files stay in object storage (only keys here). Scrubbed to '{}' when status = 'removed'. | L38=Modified: length limit + scrub rule (base)
+A39=core.messages | B39=8 | C39=status | D39=VARCHAR(20) | E39=Yes | F39='sent' | H39=sent, hidden, removed, quarantined | I39=Message state. | J39=sent | K39=Named CHECK (base file values). | L39=Modified: values defined (was only 'sent')
+A40=core.messages | B40=9 | C40=created_at | D40=TIMESTAMPTZ | E40=Yes | F40=NOW() | H40=Date and time | I40=When created. | J40=2026-11-05 10:00+05:30
+A41=core.messages | B41=10 | C41=edited_at | D41=TIMESTAMPTZ | E41=No | F41=NULL | H41=Date and time; NULL if never edited | I41=When content was last edited. | K41=CHECK >= created_at. | L41=Modified: time-order rule
+A42=core.messages | B42=11 | C42=deleted_at | D42=TIMESTAMPTZ | E42=No | F42=NULL | H42=Date and time; NULL if not removed | I42=When content was removed / scrubbed. | K42=Filled exactly when status = 'removed' (base file). | L42=Modified: tied to status 'removed'
+A43=core.messages | B43=12 | C43=reply_to_message_id | D43=BIGINT | E43=No | F43=NULL | G43=FK (with conversation_id) | H43=NULL or a message in the same conversation | I43=Message being replied to. | J43=40 | K43=Composite FK (conversation_id, reply_to_message_id) -> messages(conversation_id, id). | L43=Modified: same-conversation FK
+A44=core.messages | B44=13 | C44=public_id | D44=UUID | E44=Yes | F44=gen_random_uuid() | G44=UNIQUE | H44=Random UUID | I44=Public ID so internal numbers are not exposed. | J44=3b1e... | K44=Not an access control. | L44=Modified: decided - always present (his sheet still says 'if present in live schema')
+A45=core.message_read_cursors | B45=1 | C45=conversation_id | D45=BIGINT | E45=Yes | G45=PK (with user_id), FK | H45=FK -> core.conversations(id) ON DELETE RESTRICT | I45=Conversation tracked. | J45=1 | L45=Modified: PK part
+A46=core.message_read_cursors | B46=2 | C46=user_id | D46=UUID | E46=Yes | G46=PK (with conversation_id), FK | H46=FK -> core.users(user_id) ON DELETE RESTRICT | I46=User whose read position is tracked. | J46=fcba728f-... | K46=Must be an active row in conversation_participants (trigger). | L46=Modified: type UUID + PK part
+A47=core.message_read_cursors | B47=3 | C47=last_read_message_id | D47=BIGINT | E47=No | F47=NULL | G47=FK (with conversation_id) | H47=Message in the same conversation; NULL = nothing read yet | I47=Latest message read. | J47=42 | K47=Composite FK (conversation_id, last_read_message_id) -> messages(conversation_id, id); only moves forward. | L47=Modified: composite FK + forward-only
+A48=core.message_read_cursors | B48=4 | C48=last_read_at | D48=TIMESTAMPTZ | E48=No | F48=NULL | H48=Date and time; NULL if nothing read | I48=When the cursor last moved. | J48=2026-11-05 10:06+05:30 | K48=Set by the database (server time), never by the client (base file). | L48=Modified: server-set only
+A49=core.conversation_participants | B49=1 | C49=id | D49=BIGINT identity | E49=Yes | F49=auto | G49=PK | H49=Automatically generated positive whole number | I49=Unique ID for this participant record. | J49=1 | K49=Generated always. | L49=New table
+A50=core.conversation_participants | B50=2 | C50=conversation_id | D50=BIGINT | E50=Yes | G50=FK | H50=FK -> core.conversations(id) ON DELETE RESTRICT | I50=Conversation this membership belongs to. | J50=1 | K50=Partial UNIQUE (conversation_id, user_id) WHERE status = 'active': one active membership per user. | L50=New table + one active membership rule
+A51=core.conversation_participants | B51=3 | C51=user_id | D51=UUID | E51=Yes | G51=FK | H51=FK -> core.users(user_id) ON DELETE RESTRICT | I51=User who is a member. | J51=fcba728f-... | K51=Direct conversation: exactly the 2 users of its connection (trigger). | L51=Modified: type UUID -> core.users(user_id)
+A52=core.conversation_participants | B52=4 | C52=role | D52=VARCHAR(20) | E52=Yes | F52='member' | H52=owner, admin, member | I52=Permission level in the conversation. | J52=member | K52=Named CHECK. Partial UNIQUE (conversation_id) WHERE role = 'owner' AND status = 'active': one active owner per group. Direct chats: both 'member'. | L52=Modified: one-owner rule as a partial UNIQUE; direct = member only
+A53=core.conversation_participants | B53=5 | C53=status | D53=VARCHAR(20) | E53=Yes | F53='active' | H53=active, left, removed, banned | I53=Membership state. | J53=active | K53=Named CHECK. banned user cannot be added again to the same conversation (trigger). | L53=Modified: banned blocks re-adding
+A54=core.conversation_participants | B54=6 | C54=joined_at | D54=TIMESTAMPTZ | E54=Yes | F54=NOW() | H54=Date and time | I54=When the user joined. | J54=2026-11-05 10:00+05:30
+A55=core.conversation_participants | B55=7 | C55=left_at | D55=TIMESTAMPTZ | E55=No | F55=NULL | H55=Date and time; NULL while active | I55=When the membership ended. | K55=CHECK: NULL when status = 'active', filled for left / removed / banned; >= joined_at. | L55=Modified: 'should be set' becomes a CHECK
+A56=core.conversation_participants | B56=8 | C56=added_by_user_id | D56=UUID | E56=No | F56=NULL | G56=FK | H56=FK -> core.users(user_id) ON DELETE RESTRICT; NULL for the creator | I56=User who added this participant. | J56=6be8fb9a-... | K56=Must be an active owner / admin of the same conversation (trigger). NULL only for the creator and direct chats. | L56=Modified: type UUID + adder must be owner / admin
+A57=core.conversation_participants | B57=9 | C57=removed_by_user_id | D57=UUID | E57=No | F57=NULL | G57=FK | H57=FK -> core.users(user_id) ON DELETE RESTRICT | I57=Owner / admin who removed or banned the user. | J57=6be8fb9a-... | K57=Filled exactly when status IN ('removed','banned'). | L57=New column (suggested)
+A58=core.conversation_participants | B58=10 | C58=created_at | D58=TIMESTAMPTZ | E58=Yes | F58=NOW() | H58=Date and time | I58=When this row was created. | J58=2026-11-05 10:00+05:30
+
+SHEET: Value Lists [state=]
+A1=Value lists - table > column > allowed values
+A2=Each table (dark band) lists all its columns; under each column its allowed values or its format. Use + / - on the left to fold.
+A4=# | B4=Column | C4=Value / format | D4=Meaning | E4=When / notes | F4=Change
+A5=core.discovery_dismissals   |   10 columns (3 with fixed value lists)   |   Profiles a user hides from discovery (temporary 30 days, everywhere, or in one category).
+A6=1 | B6=id | C6=BIGINT identity  |  required | D6=Unique ID for this dismissal. | E6=Free format
+B7=↳ | C7=Automatically generated positive whole number | D7=Example: 1 | E7=Generated always.
+A8=2 | B8=viewer_user_id | C8=UUID  |  required | D8=User who dismisses the candidate. | E8=Free format
+B9=↳ | C9=FK -> core.users(user_id) ON DELETE RESTRICT | D9=Example: fcba728f-... | E9=Team rule: user links are UUID to users.user_id.
+A10=3 | B10=candidate_user_id | C10=UUID  |  required | D10=Profile being dismissed. | E10=Free format
+B11=↳ | C11=FK -> core.users(user_id) ON DELETE RESTRICT | D11=Example: 6be8fb9a-... | E11=CHECK viewer_user_id <> candidate_user_id.
+A12=4 | B12=scope | C12=VARCHAR(20)  |  required | D12=How broadly the candidate is hidden. | E12=3 allowed values
+B13=↳ | C13=temporary | D13=Hidden for exactly 30 days. | E13=expires_at set by trigger
+B14=↳ | C14=all | D14=Hidden everywhere (default).
+B15=↳ | C15=category | D15=Hidden in one discovery section. | E15=category_code required
+A16=5 | B16=reason_code | C16=VARCHAR(40)  |  optional | D16=Why the profile was dismissed. | E16=50 allowed values
+B17=↳ | C17=not_interested | D17=Not interested in this person
+B18=↳ | C18=already_know | D18=Already know this person
+B19=↳ | C19=incompatible_interests | D19=Interests are not compatible
+B20=↳ | C20=incompatible_goals | D20=Personal goals are different
+B21=↳ | C21=not_relevant | D21=Profile is not relevant to me
+B22=↳ | C22=duplicate_profile | D22=Duplicate profile
+B23=↳ | C23=incomplete_profile | D23=Profile information is incomplete
+B24=↳ | C24=inappropriate_content | D24=Profile contains inappropriate content | E24=Also opens a report in safety.reports
+B25=↳ | C25=suspicious_profile | D25=Profile appears suspicious | E25=Also opens a report in safety.reports
+B26=↳ | C26=privacy_concern | D26=Privacy-related concerns
+B27=↳ | C27=unwanted_contact | D27=Do not want contact from this person
+B28=↳ | C28=communication_mismatch | D28=Communication preferences do not match
+B29=↳ | C29=different_values | D29=Personal values are different
+B30=↳ | C30=different_lifestyle | D30=Lifestyle preferences are different
+B31=↳ | C31=different_age_group | D31=Prefer a different age group
+B32=↳ | C32=different_location | D32=Person is outside my preferred location
+B33=↳ | C33=professional_mismatch | D33=Professional interests do not match
+B34=↳ | C34=academic_mismatch | D34=Academic interests do not match
+B35=↳ | C35=too_many_similar_profiles | D35=Seeing too many similar profiles
+B36=↳ | C36=previous_negative_experience | D36=Previous interaction was uncomfortable
+B37=↳ | C37=uncomfortable_interaction | D37=Interaction made me uncomfortable
+B38=↳ | C38=fake_information | D38=Profile information appears false | E38=Also opens a report in safety.reports
+B39=↳ | C39=offensive_behavior | D39=Behavior or content is offensive | E39=Also opens a report in safety.reports
+B40=↳ | C40=prefer_other_categories | D40=Prefer discovering people in other categories
+B41=↳ | C41=other | D41=Another reason not listed
+B42=↳ | C42=not_looking_to_connect | D42=Not currently looking to connect
+B43=↳ | C43=profile_not_active | D43=Profile appears inactive
+B44=↳ | C44=limited_common_interests | D44=Very few shared interests
+B45=↳ | C45=different_communication_style | D45=Communication styles differ
+B46=↳ | C46=not_a_good_match | D46=Do not feel this is a suitable match
+B47=↳ | C47=repeated_requests | D47=Repeated or unwanted connection requests
+B48=↳ | C48=spam_behavior | D48=Profile appears to be used for spam | E48=Also opens a report in safety.reports
+B49=↳ | C49=harassment | D49=Experiencing harassment from this person | E49=Also opens a report in safety.reports
+B50=↳ | C50=threatening_behavior | D50=Threatening or intimidating behavior | E50=Also opens a report in safety.reports
+B51=↳ | C51=hate_or_discrimination | D51=Hateful or discriminatory content | E51=Also opens a report in safety.reports
+B52=↳ | C52=misleading_photos | D52=Photos appear misleading | E52=Also opens a report in safety.reports
+B53=↳ | C53=impersonation | D53=May be impersonating someone else | E53=Also opens a report in safety.reports
+B54=↳ | C54=underage_concern | D54=Concern that the profile owner is underage | E54=Always opens a child-safety report (severity 4)
+B55=↳ | C55=scam_or_fraud | D55=Possible scam or fraudulent activity | E55=Also opens a report in safety.reports
+B56=↳ | C56=explicit_content | D56=Contains sexually explicit or graphic content | E56=Also opens a report in safety.reports
+B57=↳ | C57=political_disagreement | D57=Political views are incompatible
+B58=↳ | C58=belief_difference | D58=Beliefs or worldview are incompatible | F58=Flagged: Reveals belief / religion (sensitive) - suggest map to different_values
+B59=↳ | C59=unwanted_topics | D59=Frequently shares topics I do not want to see
+B60=↳ | C60=low_quality_profile | D60=Profile lacks useful or meaningful information
+B61=↳ | C61=poor_interaction | D61=Previous interaction was unpleasant | F61=Flagged: Same as previous_negative_experience
+B62=↳ | C62=boundary_violation | D62=Did not respect personal boundaries | E62=Also opens a report in safety.reports | F62=Modified: also report to safety
+B63=↳ | C63=conflicting_expectations | D63=Expectations for connection are different
+B64=↳ | C64=not_my_community | D64=Not part of the community I want to discover
+B65=↳ | C65=content_not_for_me | D65=Content does not match my preferences
+A67=6 | B67=created_at | C67=TIMESTAMPTZ  |  required | D67=When the dismissal was created. | E67=Free format
+B68=↳ | C68=Date and time | D68=Example: 2026-11-05 10:00+05:30
+A69=7 | B69=expires_at | C69=TIMESTAMPTZ  |  optional | D69=Temporary dismissal expiry. | E69=Free format
+B70=↳ | C70=Date and time; NULL for all / category | D70=Example: 2026-12-05 10:00+05:30 | E70=Trigger sets exactly created_at + 30 days for temporary; CHECK: NULL for all / category.
+A71=8 | B71=category_code | C71=VARCHAR(30)  |  optional | D71=Discovery section in which the candidate is hidden. | E71=30 allowed values | F71=Modified: 30 codes; mismatch with core.interests flagged
+B72=↳ | C72=technology | D72=Technology: Programming, software, AI, and emerging technologies | E72=No matching interest category | F72=Flagged: no match in core.interests
+B73=↳ | C73=engineering | D73=Engineering: Engineering fields and technical disciplines | E73=No matching interest category | F73=Flagged: no match in core.interests
+B74=↳ | C74=science | D74=Science: Physics, chemistry, biology, and research | E74=No matching interest category | F74=Flagged: no match in core.interests
+B75=↳ | C75=education | D75=Education & Learning: Learning, courses, and academic development | E75=No matching interest category | F75=Flagged: no match in core.interests
+B76=↳ | C76=college | D76=College & Campus: College life, campus activities, and students | E76=No matching interest category | F76=Flagged: no match in core.interests
+B77=↳ | C77=career | D77=Career & Professional Growth: Career development and professional interests | E77=No matching interest category | F77=Flagged: no match in core.interests
+B78=↳ | C78=entrepreneurship | D78=Entrepreneurship: Startups, business ideas, and founders | E78=No matching interest category | F78=Flagged: no match in core.interests
+B79=↳ | C79=business | D79=Business & Management: Business, management, and leadership | E79=No matching interest category | F79=Flagged: no match in core.interests
+B80=↳ | C80=finance | D80=Finance & Investing: Financial knowledge, budgeting, and investing | E80=No matching interest category | F80=Flagged: no match in core.interests
+B81=↳ | C81=music | D81=Music: Singing, instruments, and music production | E81=Matches interest category Music
+B82=↳ | C82=arts | D82=Arts & Creativity: Drawing, painting, design, and creative work | E82=Matches interest category Art & Drawing
+B83=↳ | C83=photography | D83=Photography: Photography, editing, and visual storytelling | E83=No matching interest category | F83=Flagged: no match in core.interests
+B84=↳ | C84=writing | D84=Writing & Literature: Writing, poetry, books, and literature | E84=Matches interest category Writing
+B85=↳ | C85=movies | D85=Movies & Entertainment: Films, series, cinema, and entertainment | E85=Matches interest category Movies
+B86=↳ | C86=gaming | D86=Gaming: Video games, esports, and gaming communities | E86=No matching interest category | F86=Flagged: no match in core.interests
+B87=↳ | C87=sports | D87=Sports & Fitness: Sports, athletics, and physical activities | E87=Matches interest category Sports
+B88=↳ | C88=fitness | D88=Health & Fitness Activities: Gym, workouts, running, and fitness goals | E88=No matching interest category | F88=Flagged: no match in core.interests
+B89=↳ | C89=travel | D89=Travel & Exploration: Travel, tourism, and exploration | E89=No matching interest category | F89=Flagged: no match in core.interests
+B90=↳ | C90=food | D90=Food & Cooking: Cooking, food experiences, and cuisines | E90=Matches interest category Cooking
+B91=↳ | C91=fashion | D91=Fashion & Style: Fashion, styling, clothing, and trends | E91=No matching interest category | F91=Flagged: no match in core.interests
+B92=↳ | C92=nature | D92=Nature & Environment: Nature, wildlife, and sustainability | E92=No matching interest category | F92=Flagged: no match in core.interests
+B93=↳ | C93=volunteering | D93=Volunteering & Social Service: Community service, charity, and helping others | E93=No matching interest category | F93=Flagged: no match in core.interests
+B94=↳ | C94=social_causes | D94=Social Causes: Community issues and social initiatives | E94=No matching interest category | F94=Flagged: no match in core.interests
+B95=↳ | C95=culture | D95=Culture & Traditions: Cultural interests, traditions, and heritage | E95=No matching interest category | F95=Flagged: no match in core.interests
+B96=↳ | C96=languages | D96=Languages: Learning and practicing languages | E96=No matching interest category | F96=Flagged: no match in core.interests
+B97=↳ | C97=relationships | D97=Relationships & Friendship: Friendship, social connections, and relationships | E97=No matching interest category | F97=Flagged: no match in core.interests
+B98=↳ | C98=personal_development | D98=Personal Development: Self-improvement, confidence, and personal growth | E98=No matching interest category | F98=Flagged: no match in core.interests
+B99=↳ | C99=spirituality | D99=Spirituality & Mindfulness: Meditation, mindfulness, and spiritual interests | E99=No matching interest category | F99=Flagged: no match in core.interests
+B100=↳ | C100=events_communities | D100=Events & Communities: Meetups, clubs, events, and communities | E100=No matching interest category | F100=Flagged: no match in core.interests
+B101=↳ | C101=general | D101=General Discovery: Profiles that do not fit a specific category | E101=No matching interest category | F101=Flagged: no match in core.interests
+A102=9 | B102=reversed_at | C102=TIMESTAMPTZ  |  optional | D102=When the user reversed the dismissal. | E102=Free format | F102=Modified: time-order rule added
+B103=↳ | C103=Date and time; NULL while active | E103=CHECK reversed_at >= created_at.
+A104=10 | B104=updated_at | C104=TIMESTAMPTZ  |  required | D104=Last time the record changed. | E104=Free format
+B105=↳ | C105=Date and time | E105=Set by trigger.
+A107=core.acknowledgements   |   9 columns (3 with fixed value lists)   |   Positive / supportive acknowledgements sent from one user to another. | F107=Modified
+A108=1 | B108=id | C108=BIGINT identity  |  required | D108=Unique ID for this acknowledgement. | E108=Free format
+B109=↳ | C109=Automatically generated positive whole number | D109=Example: 1 | E109=Generated always.
+A110=2 | B110=actor_user_id | C110=UUID  |  required | D110=User who sends it. | E110=Free format | F110=Modified: type UUID -> core.users(user_id)
+B111=↳ | C111=FK -> core.users(user_id) ON DELETE RESTRICT | D111=Example: fcba728f-...
+A112=3 | B112=target_user_id | C112=UUID  |  required | D112=User receiving it. | E112=Free format | F112=Modified: type UUID + cannot acknowledge yourself
+B113=↳ | C113=FK -> core.users(user_id) ON DELETE RESTRICT | D113=Example: 6be8fb9a-... | E113=CHECK actor_user_id <> target_user_id.
+A114=4 | B114=category | C114=VARCHAR(40)  |  required | D114=Group of the acknowledgement. | E114=10 allowed values | F114=Modified: replaces acknowledgement_type
+B115=↳ | C115=gratitude_appreciation | D115=Gratitude & Appreciation | E115=8 subcategories | F115=New (his update)
+B116=↳ | C116=love_affection | D116=Love & Affection | E116=8 subcategories | F116=New (his update)
+B117=↳ | C117=joy_celebration | D117=Joy & Celebration | E117=8 subcategories | F117=New (his update)
+B118=↳ | C118=encouragement_motivation | D118=Encouragement & Motivation | E118=8 subcategories | F118=New (his update)
+B119=↳ | C119=care_concern | D119=Care & Concern | E119=8 subcategories | F119=New (his update)
+B120=↳ | C120=empathy_support | D120=Empathy & Support | E120=8 subcategories | F120=New (his update)
+B121=↳ | C121=respect_admiration | D121=Respect & Admiration | E121=8 subcategories | F121=New (his update)
+B122=↳ | C122=friendship_belonging | D122=Friendship & Belonging | E122=8 subcategories | F122=New (his update)
+B123=↳ | C123=apology_forgiveness | D123=Apology & Forgiveness | E123=8 subcategories | F123=New (his update)
+B124=↳ | C124=hope_wellbeing | D124=Hope & Well-being | E124=8 subcategories | F124=New (his update)
+A125=5 | B125=subcategory | C125=VARCHAR(40)  |  required | D125=Exact acknowledgement sent. | E125=90 allowed values | F125=New column (his update) + pair CHECK + one column name
+B126=↳ | C126=gratitude_appreciation | D126=Gratitude & Appreciation | E126=GROUP (8 below)
+B127=↳ | C127=    thank_you | D127=Expressing thanks for someone's help, kindness, or effort. | E127=under gratitude_appreciation
+B128=↳ | C128=    deep_gratitude | D128=Expressing heartfelt and meaningful appreciation. | E128=under gratitude_appreciation
+B129=↳ | C129=    appreciation | D129=Recognizing someone's contribution or positive action. | E129=under gratitude_appreciation
+B130=↳ | C130=    grateful_for_you | D130=Showing gratitude for someone's presence in your life. | E130=under gratitude_appreciation
+B131=↳ | C131=    thoughtfulness | D131=Appreciating a considerate or thoughtful gesture. | E131=under gratitude_appreciation
+B132=↳ | C132=    generosity | D132=Recognizing someone's willingness to give or help. | E132=under gratitude_appreciation
+B133=↳ | C133=    recognition | D133=Acknowledging someone's effort, work, or contribution. | E133=under gratitude_appreciation
+B134=↳ | C134=    gratitude_for_support | D134=Thanking someone for standing by you. | E134=under gratitude_appreciation
+B135=↳ | C135=love_affection | D135=Love & Affection | E135=GROUP (8 below)
+B136=↳ | C136=    love | D136=Expressing deep love and emotional attachment. | E136=under love_affection | F136=Flagged: column written as subcategory_code here
+B137=↳ | C137=    affection | D137=Showing fondness, warmth, or tenderness. | E137=under love_affection | F137=Flagged: column written as subcategory_code here
+B138=↳ | C138=    care | D138=Letting someone know they matter to you. | E138=under love_affection | F138=Flagged: column written as subcategory_code here
+B139=↳ | C139=    miss_you | D139=Expressing that someone's absence is felt. | E139=under love_affection | F139=Flagged: column written as subcategory_code here
+B140=↳ | C140=    thinking_of_you | D140=Letting someone know they are in your thoughts. | E140=under love_affection | F140=Flagged: column written as subcategory_code here
+B141=↳ | C141=    you_matter | D141=Reminding someone that they are important. | E141=under love_affection | F141=Flagged: column written as subcategory_code here
+B142=↳ | C142=    special_to_me | D142=Expressing someone's unique place in your life. | E142=under love_affection | F142=Flagged: column written as subcategory_code here
+B143=↳ | C143=    warmth | D143=Sharing a gentle and affectionate feeling. | E143=under love_affection | F143=Flagged: column written as subcategory_code here
+B144=↳ | C144=joy_celebration | D144=Joy & Celebration | E144=GROUP (8 below)
+B145=↳ | C145=    congratulations | D145=Celebrating someone's achievement or good news. | E145=under joy_celebration
+B146=↳ | C146=    birthday_wish | D146=Sending warm wishes on someone's birthday. | E146=under joy_celebration
+B147=↳ | C147=    anniversary_wish | D147=Celebrating a meaningful anniversary. | E147=under joy_celebration
+B148=↳ | C148=    success_celebration | D148=Sharing happiness about someone's success. | E148=under joy_celebration
+B149=↳ | C149=    milestone_celebration | D149=Recognizing an important life or personal milestone. | E149=under joy_celebration
+B150=↳ | C150=    good_news | D150=Responding positively to someone's happy news. | E150=under joy_celebration
+B151=↳ | C151=    proud_of_you | D151=Expressing pride in someone's effort or achievement. | E151=under joy_celebration
+B152=↳ | C152=    shared_happiness | D152=Sharing in another person's happiness. | E152=under joy_celebration
+B153=↳ | C153=encouragement_motivation | D153=Encouragement & Motivation | E153=GROUP (8 below)
+B154=↳ | C154=    encouragement | D154=Giving someone confidence to continue. | E154=under encouragement_motivation
+B155=↳ | C155=    good_luck | D155=Wishing someone success in an upcoming effort. | E155=under encouragement_motivation
+B156=↳ | C156=    you_can_do_it | D156=Expressing belief in someone's ability. | E156=under encouragement_motivation
+B157=↳ | C157=    keep_going | D157=Encouraging persistence through difficulty. | E157=under encouragement_motivation
+B158=↳ | C158=    stay_strong | D158=Encouraging resilience during a challenge. | E158=under encouragement_motivation
+B159=↳ | C159=    believe_in_you | D159=Showing confidence in someone's potential. | E159=under encouragement_motivation
+B160=↳ | C160=    new_beginning | D160=Encouraging someone starting a new chapter. | E160=under encouragement_motivation
+B161=↳ | C161=    inspiration | D161=Recognizing someone as a source of motivation. | E161=under encouragement_motivation
+B162=↳ | C162=care_concern | D162=Care & Concern | E162=GROUP (8 below)
+B163=↳ | C163=    get_well_soon | D163=Wishing someone a quick and comfortable recovery. | E163=under care_concern
+B164=↳ | C164=    take_care | D164=Showing concern for someone's well-being. | E164=under care_concern
+B165=↳ | C165=    are_you_okay | D165=Checking in on someone's condition or feelings. | E165=under care_concern
+B166=↳ | C166=    safe_journey | D166=Wishing someone a safe trip. | E166=under care_concern
+B167=↳ | C167=    rest_well | D167=Encouraging someone to rest and look after themselves. | E167=under care_concern
+B168=↳ | C168=    well_wishes | D168=Sending general wishes for health and well-being. | E168=under care_concern
+B169=↳ | C169=    recovery_support | D169=Showing care during someone's recovery. | E169=under care_concern
+B170=↳ | C170=    self_care | D170=Encouraging someone to prioritize their own well-being. | E170=under care_concern
+B171=↳ | C171=empathy_support | D171=Empathy & Support | E171=GROUP (8 below)
+B172=↳ | C172=    sympathy | D172=Expressing compassion during a difficult experience. | E172=under empathy_support
+B173=↳ | C173=    condolences | D173=Expressing sorrow after someone's loss. | E173=under empathy_support
+B174=↳ | C174=    here_for_you | D174=Offering presence and support during a difficult time. | E174=under empathy_support
+B175=↳ | C175=    you_are_not_alone | D175=Reassuring someone that they have support. | E175=under empathy_support
+B176=↳ | C176=    understanding | D176=Showing that you understand someone's feelings. | E176=under empathy_support
+B177=↳ | C177=    comfort | D177=Offering kindness and emotional comfort. | E177=under empathy_support
+B178=↳ | C178=    you_are_heard | D178=Acknowledging that someone's feelings and concerns matter. | E178=under empathy_support
+B179=↳ | C179=    standing_with_you | D179=Showing solidarity with someone facing a challenge. | E179=under empathy_support
+B180=↳ | C180=respect_admiration | D180=Respect & Admiration | E180=GROUP (8 below)
+B181=↳ | C181=    respect | D181=Showing regard for someone's values or actions. | E181=under respect_admiration
+B182=↳ | C182=    admiration | D182=Expressing that you value someone's qualities. | E182=under respect_admiration
+B183=↳ | C183=    courage | D183=Recognizing someone's bravery. | E183=under respect_admiration
+B184=↳ | C184=    dedication | D184=Appreciating someone's commitment and effort. | E184=under respect_admiration
+B185=↳ | C185=    integrity | D185=Recognizing honesty and strong principles. | E185=under respect_admiration
+B186=↳ | C186=    kindness | D186=Appreciating someone's kind behavior. | E186=under respect_admiration
+B187=↳ | C187=    patience | D187=Recognizing someone's patience and understanding. | E187=under respect_admiration
+B188=↳ | C188=    wisdom | D188=Appreciating someone's insight or good judgment. | E188=under respect_admiration
+B189=↳ | C189=friendship_belonging | D189=Friendship & Belonging | E189=GROUP (8 below)
+B190=↳ | C190=    friendship | D190=Celebrating the bond of friendship. | E190=under friendship_belonging
+B191=↳ | C191=    companionship | D191=Appreciating someone's company. | E191=under friendship_belonging
+B192=↳ | C192=    loyalty | D192=Recognizing faithfulness and dependability. | E192=under friendship_belonging
+B193=↳ | C193=    togetherness | D193=Celebrating a sense of connection. | E193=under friendship_belonging
+B194=↳ | C194=    welcome | D194=Making someone feel warmly received. | E194=under friendship_belonging
+B195=↳ | C195=    welcome_back | D195=Greeting someone returning after an absence. | E195=under friendship_belonging
+B196=↳ | C196=    you_belong | D196=Reassuring someone that they are accepted. | E196=under friendship_belonging
+B197=↳ | C197=    glad_you_are_here | D197=Showing happiness that someone is present. | E197=under friendship_belonging
+B198=↳ | C198=apology_forgiveness | D198=Apology & Forgiveness | E198=GROUP (8 below)
+B199=↳ | C199=    apology | D199=Saying sorry for an action or mistake. | E199=under apology_forgiveness
+B200=↳ | C200=    sincere_apology | D200=Expressing genuine regret and responsibility. | E200=under apology_forgiveness
+B201=↳ | C201=    asking_forgiveness | D201=Requesting forgiveness from someone. | E201=under apology_forgiveness
+B202=↳ | C202=    forgiveness | D202=Communicating that you forgive someone. | E202=under apology_forgiveness
+B203=↳ | C203=    regret | D203=Expressing sorrow about something that happened. | E203=under apology_forgiveness
+B204=↳ | C204=    making_amends | D204=Showing willingness to repair harm. | E204=under apology_forgiveness
+B205=↳ | C205=    second_chance | D205=Offering an opportunity to try again. | E205=under apology_forgiveness
+B206=↳ | C206=    reconciliation | D206=Expressing a wish to restore a relationship. | E206=under apology_forgiveness
+B207=↳ | C207=hope_wellbeing | D207=Hope & Well-being | E207=GROUP (8 below)
+B208=↳ | C208=    hope | D208=Expressing hope for a positive outcome. | E208=under hope_wellbeing
+B209=↳ | C209=    stay_positive | D209=Encouraging a hopeful outlook. | E209=under hope_wellbeing
+B210=↳ | C210=    better_days_ahead | D210=Reassuring someone that circumstances can improve. | E210=under hope_wellbeing
+B211=↳ | C211=    happiness | D211=Wishing someone joy and happiness. | E211=under hope_wellbeing
+B212=↳ | C212=    peace | D212=Wishing someone calm and peace of mind. | E212=under hope_wellbeing
+B213=↳ | C213=    good_health | D213=Wishing someone lasting health. | E213=under hope_wellbeing
+B214=↳ | C214=    all_the_best | D214=Sending broad wishes for success and well-being. | E214=under hope_wellbeing
+B215=↳ | C215=    fresh_start | D215=Supporting a positive new beginning. | E215=under hope_wellbeing
+A216=6 | B216=status | C216=VARCHAR(20)  |  required | D216=Current state. | E216=4 allowed values | F216=Modified: hidden, expired added (base file)
+B217=↳ | C217=active | D217=Visible (default).
+B218=↳ | C218=undone | D218=Sender took it back. | E218=undone_at filled
+A221=7 | B221=idempotency_key | C221=VARCHAR(255)  |  optional | D221=Prevents duplicates when a request is retried. | E221=Free format | F221=Modified: unique per actor (base file)
+B222=↳ | C222=Text up to 255 characters, or NULL | D222=Example: ack-7f3a | E222=UNIQUE (actor_user_id, idempotency_key) when supplied.
+A223=8 | B223=created_at | C223=TIMESTAMPTZ  |  required | D223=When created. | E223=Free format
+B224=↳ | C224=Date and time | D224=Example: 2026-11-05 10:00+05:30
+A225=9 | B225=undone_at | C225=TIMESTAMPTZ  |  optional | D225=When it was undone. | E225=Free format | F225=Modified: consistency rule added
+B226=↳ | C226=Date and time; NULL if not undone | E226=Filled exactly when status = 'undone'; >= created_at.
+A228=core.conversations   |   8 columns (2 with fixed value lists)   |   Chat conversations (direct; group needs approval). | F228=Modified
+A229=1 | B229=id | C229=BIGINT identity  |  required | D229=Internal conversation ID. | E229=Free format
+B230=↳ | C230=Automatically generated positive whole number | D230=Example: 1 | E230=Generated always.
+A231=2 | B231=connection_id | C231=Same type as core.connections.id  |  optional | D231=Links a direct chat to its accepted connection. | E231=Free format | F231=Modified: FK + UNIQUE + type rule
+B232=↳ | C232=Existing connection (Mahera's core.connections); NULL only for group | D232=Example: 12 | E232=FK ON DELETE RESTRICT; UNIQUE = one conversation per connection; CHECK (type='direct') = (connection_id IS NOT NULL).
+A233=3 | B233=type | C233=VARCHAR(20)  |  required | D233=Conversation kind. | E233=2 allowed values | F233=Modified: 'group' needs approval
+B234=↳ | C234=direct | D234=One-to-one chat linked to a connection (default).
+B235=↳ | C235=group | D235=Group chat. | E235=Needs approval; members in conversation_participants | F235=Needs approval
+A236=4 | B236=status | C236=VARCHAR(20)  |  required | D236=Conversation-wide state. | E236=5 allowed values | F236=Modified: archived / blocked flagged
+B237=↳ | C237=active | D237=Open (default).
+B238=↳ | C238=restricted | D238=Limited (e.g. safety review).
+B239=↳ | C239=closed | D239=Closed (disconnect / block). | E239=closed_at filled
+B240=↳ | C240=archived | D240=Archived. | E240=Per-user choice - review | F240=Review
+B241=↳ | C241=blocked | D241=Blocked. | E241=Comes from core.blocks - review | F241=Review
+A242=5 | B242=last_message_at | C242=TIMESTAMPTZ  |  optional | D242=Latest message time (inbox sorting). | E242=Free format | F242=Modified: time-order rule
+B243=↳ | C243=Date and time; NULL until first message | D243=Example: 2026-11-05 10:05+05:30 | E243=CHECK >= created_at; set by the send routine.
+A244=6 | B244=created_at | C244=TIMESTAMPTZ  |  required | D244=When created. | E244=Free format
+B245=↳ | C245=Date and time | D245=Example: 2026-11-05 10:00+05:30
+A246=7 | B246=closed_at | C246=TIMESTAMPTZ  |  optional | D246=When closed. | E246=Free format | F246=Modified: consistency rule
+B247=↳ | C247=Date and time; NULL if not closed | E247=Filled exactly when status = 'closed'; >= created_at.
+A248=8 | B248=updated_at | C248=TIMESTAMPTZ  |  required | D248=Last conversation-level update. | E248=Free format
+B249=↳ | C249=Date and time | E249=Set by trigger.
+A251=core.messages   |   13 columns (2 with fixed value lists)   |   Messages inside a conversation.
+A252=1 | B252=id | C252=BIGINT identity  |  required | D252=Internal message ID. | E252=Free format
+B253=↳ | C253=Automatically generated positive whole number | D253=Example: 1 | E253=UNIQUE (conversation_id, id) needed by the read-cursor FK.
+A254=2 | B254=conversation_id | C254=BIGINT  |  required | D254=Conversation receiving the message. | E254=Free format
+B255=↳ | C255=FK -> core.conversations(id) ON DELETE RESTRICT | D255=Example: 1
+A256=3 | B256=conversation_seq | C256=BIGINT  |  required | D256=Stable order within a conversation. | E256=Free format
+B257=↳ | C257=Positive integer, increasing within a conversation | D257=Example: 42 | E257=Assigned by the send routine; CHECK > 0.
+A258=4 | B258=sender_user_id | C258=UUID  |  required | D258=User who sent it. | E258=Free format
+B259=↳ | C259=FK -> core.users(user_id) ON DELETE RESTRICT | D259=Example: fcba728f-... | E259=Must be an active row in conversation_participants (checked in send routine).
+A260=5 | B260=client_message_id | C260=VARCHAR(64)  |  required | D260=Stops duplicate messages on network retries. | E260=Free format
+B261=↳ | C261=Client-generated ID per send (e.g. UUID), max 64 chars | D261=Example: c-3f9a... | E261=Base file: required + unique per sender.
+A262=6 | B262=message_type | C262=VARCHAR(20)  |  required | D262=How to read the content. | E262=10 allowed values
+B263=↳ | C263=text | D263=Text message (default).
+B264=↳ | C264=system | D264=System notice.
+B265=↳ | C265=image | D265=Image.
+B266=↳ | C266=video | D266=Video.
+B267=↳ | C267=document | D267=Document.
+B268=↳ | C268=voice | D268=Voice note.
+B269=↳ | C269=audio | D269=Audio file.
+B270=↳ | C270=location | D270=Location. | E270=Personal data
+B271=↳ | C271=contact | D271=Contact card. | E271=Personal data
+B272=↳ | C272=sticker | D272=Sticker.
+A273=7 | B273=content | C273=JSONB  |  required | D273=Message payload / metadata. | E273=Free format
+B274=↳ | C274=JSON object; text up to 2000 characters; file references only | D274=Example: {"text":"Hi!"} | E274=Files stay in object storage (only keys here). Scrubbed to '{}' when status = 'removed'.
+A275=8 | B275=status | C275=VARCHAR(20)  |  required | D275=Message state. | E275=4 allowed values
+B276=↳ | C276=sent | D276=Stored successfully by backend
+B277=↳ | C277=delieverd | D277=Reached recipient's device
+B278=↳ | C278=read | D278=Recipient has read the message | E278=deleted_at filled, content '{}'
+B279=↳ | C279=failed | D279=Sending failed
+A280=9 | B280=created_at | C280=TIMESTAMPTZ  |  required | D280=When created. | E280=Free format
+B281=↳ | C281=Date and time | D281=Example: 2026-11-05 10:00+05:30
+A282=10 | B282=edited_at | C282=TIMESTAMPTZ  |  optional | D282=When content was last edited. | E282=Free format | F282=\
+B283=↳ | C283=Date and time; NULL if never edited | E283=CHECK >= created_at.
+A284=11 | B284=deleted_at | C284=TIMESTAMPTZ  |  optional | D284=When content was removed / scrubbed. | E284=Free format
+B285=↳ | C285=Date and time; NULL if not removed | E285=Filled exactly when status = 'removed' (base file).
+A286=12 | B286=reply_to_message_id | C286=BIGINT  |  optional | D286=Message being replied to. | E286=Free format
+B287=↳ | C287=NULL or a message in the same conversation | D287=Example: 40 | E287=Composite FK (conversation_id, reply_to_message_id) -> messages(conversation_id, id).
+A288=13 | B288=public_id | C288=UUID  |  required | D288=Public ID so internal numbers are not exposed. | E288=Free format
+B289=↳ | C289=Random UUID | D289=Example: 3b1e... | E289=Not an access control.
+A291=core.message_read_cursors   |   4 columns (0 with fixed value lists)   |   Latest read position of each user in each conversation. | F291=Modified
+A292=1 | B292=conversation_id | C292=BIGINT  |  required | D292=Conversation tracked. | E292=Free format | F292=Modified: PK part
+B293=↳ | C293=FK -> core.conversations(id) ON DELETE RESTRICT | D293=Example: 1
+A294=2 | B294=user_id | C294=UUID  |  required | D294=User whose read position is tracked. | E294=Free format | F294=Modified: type UUID + PK part
+B295=↳ | C295=FK -> core.users(user_id) ON DELETE RESTRICT | D295=Example: fcba728f-... | E295=Must be an active row in conversation_participants (trigger).
+A296=3 | B296=last_read_message_id | C296=BIGINT  |  optional | D296=Latest message read. | E296=Free format | F296=Modified: composite FK + forward-only
+B297=↳ | C297=Message in the same conversation; NULL = nothing read yet | D297=Example: 42 | E297=Composite FK (conversation_id, last_read_message_id) -> messages(conversation_id, id); only moves forward.
+A298=4 | B298=last_read_at | C298=TIMESTAMPTZ  |  optional | D298=When the cursor last moved. | E298=Free format | F298=Modified: server-set only
+B299=↳ | C299=Date and time; NULL if nothing read | D299=Example: 2026-11-05 10:06+05:30 | E299=Set by the database (server time), never by the client (base file).
+A301=core.conversation_participants   |   10 columns (2 with fixed value lists)   |   Users who belong to a conversation, with their role and membership status. | F301=New table
+A302=1 | B302=id | C302=BIGINT identity  |  required | D302=Unique ID for this participant record. | E302=Free format | F302=New table
+B303=↳ | C303=Automatically generated positive whole number | D303=Example: 1 | E303=Generated always.
+A304=2 | B304=conversation_id | C304=BIGINT  |  required | D304=Conversation this membership belongs to. | E304=Free format | F304=New table + one active membership rule
+B305=↳ | C305=FK -> core.conversations(id) ON DELETE RESTRICT | D305=Example: 1 | E305=Partial UNIQUE (conversation_id, user_id) WHERE status = 'active': one active membership per user.
+A306=3 | B306=user_id | C306=UUID  |  required | D306=User who is a member. | E306=Free format | F306=Modified: type UUID -> core.users(user_id)
+B307=↳ | C307=FK -> core.users(user_id) ON DELETE RESTRICT | D307=Example: fcba728f-... | E307=Direct conversation: exactly the 2 users of its connection (trigger).
+A308=4 | B308=role | C308=VARCHAR(20)  |  required | D308=Permission level in the conversation. | E308=3 allowed values | F308=Modified: one-owner rule as a partial UNIQUE; direct = member only
+B309=↳ | C309=owner | D309=Group creator or current owner. | E309=Only 1 active owner per group (partial UNIQUE). Not used in direct chats.
+B310=↳ | C310=admin | D310=Can add / remove members. | E310=Group only.
+B311=↳ | C311=member | D311=Regular participant (default). | E311=Both users of a direct chat.
+A312=5 | B312=status | C312=VARCHAR(20)  |  required | D312=Membership state. | E312=4 allowed values | F312=Modified: banned blocks re-adding
+B313=↳ | C313=active | D313=Currently a participant (default). | E313=left_at NULL
+B314=↳ | C314=left | D314=Left by themselves. | E314=left_at filled
+B315=↳ | C315=removed | D315=Removed by an owner / admin. | E315=left_at + removed_by_user_id filled | F315=Modified: removed_by_user_id
+B316=↳ | C316=banned | D316=Removed and cannot be added again. | E316=left_at + removed_by_user_id filled | F316=Modified: cannot be re-added
+A317=6 | B317=joined_at | C317=TIMESTAMPTZ  |  required | D317=When the user joined. | E317=Free format
+B318=↳ | C318=Date and time | D318=Example: 2026-11-05 10:00+05:30
+A319=7 | B319=left_at | C319=TIMESTAMPTZ  |  optional | D319=When the membership ended. | E319=Free format | F319=Modified: 'should be set' becomes a CHECK
+B320=↳ | C320=Date and time; NULL while active | E320=CHECK: NULL when status = 'active', filled for left / removed / banned; >= joined_at.
+A321=8 | B321=added_by_user_id | C321=UUID  |  optional | D321=User who added this participant. | E321=Free format | F321=Modified: type UUID + adder must be owner / admin
+B322=↳ | C322=FK -> core.users(user_id) ON DELETE RESTRICT; NULL for the creator | D322=Example: 6be8fb9a-... | E322=Must be an active owner / admin of the same conversation (trigger). NULL only for the creator and direct chats.
+A323=9 | B323=removed_by_user_id | C323=UUID  |  optional | D323=Owner / admin who removed or banned the user. | E323=Free format | F323=New column (suggested)
+B324=↳ | C324=FK -> core.users(user_id) ON DELETE RESTRICT | D324=Example: 6be8fb9a-... | E324=Filled exactly when status IN ('removed','banned').
+A325=10 | B325=created_at | C325=TIMESTAMPTZ  |  required | D325=When this row was created. | E325=Free format
+B326=↳ | C326=Date and time | D326=Example: 2026-11-05 10:00+05:30
+
+SHEET: Relationships [state=]
+A1=Relationships (foreign keys)
+A2=User links point to core.users(user_id) (Aditya). conversations links to core.connections (Mahera).
+A4=Child table | B4=Column | C4=Parent table | D4=Parent column | E4=On delete | F4=Change
+A5=core.discovery_dismissals | B5=viewer_user_id | C5=core.users (Aditya) | D5=user_id | E5=RESTRICT | F5=Modified: UUID users.user_id
+A6=core.discovery_dismissals | B6=candidate_user_id | C6=core.users (Aditya) | D6=user_id | E6=RESTRICT | F6=Modified: UUID users.user_id
+A7=core.acknowledgements | B7=actor_user_id | C7=core.users (Aditya) | D7=user_id | E7=RESTRICT | F7=Modified: UUID users.user_id
+A8=core.acknowledgements | B8=target_user_id | C8=core.users (Aditya) | D8=user_id | E8=RESTRICT | F8=Modified: UUID users.user_id
+A9=core.conversations | B9=connection_id | C9=core.connections (Mahera) | D9=id | E9=RESTRICT | F9=New FK + UNIQUE
+A10=core.messages | B10=conversation_id | C10=core.conversations | D10=id | E10=RESTRICT
+A11=core.messages | B11=sender_user_id | C11=core.users (Aditya) | D11=user_id | E11=RESTRICT | F11=Modified: UUID users.user_id
+A12=core.messages | B12=(conversation_id, reply_to_message_id) | C12=core.messages | D12=(conversation_id, id) | E12=RESTRICT | F12=New composite FK
+A13=core.message_read_cursors | B13=conversation_id | C13=core.conversations | D13=id | E13=RESTRICT
+A14=core.message_read_cursors | B14=user_id | C14=core.users (Aditya) | D14=user_id | E14=RESTRICT | F14=Modified: UUID users.user_id
+A15=core.message_read_cursors | B15=(conversation_id, last_read_message_id) | C15=core.messages | D15=(conversation_id, id) | E15=RESTRICT | F15=New composite FK
+A16=core.conversation_participants | B16=conversation_id | C16=core.conversations | D16=id | E16=RESTRICT | F16=New table
+A17=core.conversation_participants | B17=user_id | C17=core.users (Aditya) | D17=user_id | E17=RESTRICT | F17=New table - UUID users.user_id
+A18=core.conversation_participants | B18=added_by_user_id | C18=core.users (Aditya) | D18=user_id | E18=RESTRICT | F18=New table - UUID users.user_id
+A19=core.conversation_participants | B19=removed_by_user_id | C19=core.users (Aditya) | D19=user_id | E19=RESTRICT | F19=New (suggested)
+
+SHEET: Open Items [state=]
+A1=Open items
+A2=To settle with the tech lead / mentor.
+A4=# | B4=Area | C4=Item | D4=Owner | E4=Status
+A5=1 | B5=Question | C5=Group chat: approve type 'group' + core.conversation_participants (base file: direct only). Also set a max group size. | D5=Mentor | E5=Open
+A6=2 | B6=Allocation | C6=Add core.conversation_participants to Rajath's allocation in the team tracker. | D6=Team | E6=Open
+A7=3 | B7=Question | C7=Message types beyond text/system (image, video, voice, location, contact...): approve? Needs storage + privacy rules. | D7=Mentor / product | E7=Open
+A8=4 | B8=Question | C8=conversations.status 'archived' (per-user) and 'blocked' (from core.blocks): keep or remove? | D8=Rajath + Prajwal | E8=Open
+A9=5 | B9=Question | C9=Tech lead confirms: user links are UUID -> core.users(user_id). | D9=Tech lead | E9=Open
+A10=6 | B10=Process | C10=Confirm data types / required / defaults against Rajath's actual SQL (not in his workbook). | D10=Rajath | E10=Open
+A11=7 | B11=Dependency | C11=conversations.connection_id -> Mahera's core.connections (agree key type). | D11=Rajath + Mahera | E11=Open
+A12=8 | B12=Dependency | C12=discovery_dismissals.category_code (30) vs core.interests categories (10): only 6 match. Agree one list, or keep discovery sections separate and map them. | D12=Rajath + Thanushree | E12=Open
+A13=9 | B13=Privacy | C13=Drop or merge political_disagreement and belief_difference (they store a user's view of someone's politics / religion). | D13=Rajath + mentor | E13=Open
+A14=10 | B14=Naming | C14=Allocation sheet says 'discovery_dismisals' (one s); table is discovery_dismissals. | D14=Team | E14=Fix tracker
+A15=11 | B15=Approval | C15=Message history after disconnect / block, and retention (base file gate). | D15=Mentor / legal | E15=Open

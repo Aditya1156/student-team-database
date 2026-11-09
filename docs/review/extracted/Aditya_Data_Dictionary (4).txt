@@ -1,0 +1,773 @@
+﻿SOURCE: Aditya_Data_Dictionary (4).xlsx
+
+SHEET: Read Me [state=]
+A1=Core Identity - Data Dictionary
+A2=SAAMYAPSYNCE AI internship - SQL & Database team - schema: core - follows the DB review workbook (final authority)
+A4=GREEN rows | B4=New or modified to follow the DB review. The 'Change' column at the right of each sheet says what changed and why. Removed items are listed in 'What Changed'.
+A5=Review is final | B5=Where the DB review and the MoM of 05 Nov disagree, the DB review is followed. MoM items the review does not mention (gender, Aadhaar / PAN hashes) are kept and listed in Open Items.
+A6=What this is | B6=Every table, every column and every allowed value of the 7 core identity tables, in plain language (rebuild from scratch in Supabase project 'internship').
+A7=How to read it | B7=Start with 'Tables' (what each table is for), then 'Data Dictionary' (every column). Allowed values with meanings are in 'Value Lists'.
+A8=Sheets | B8=What Changed - Review Compliance - Design Rationale - Application Flow - Access Rules - Tables - Data Dictionary - Value Lists - Status Transitions - Rules - Triggers & Routines - Relationships - Open Items - Hash: What We Protect / Methods / Plan by Scale / Sources
+A9=Hashing research | B9=The four Hash sheets explain how sensitive values are hashed or encrypted now (50-100 users) and how protection grows with more users.
+A10=Colour of table names | B10=Each table has its own colour in every sheet, so rows of one table are easy to spot.
+A11=Sensitivity colour | B11=High = personal data (email, phone, DOB, identity IDs, OTP hash). Medium = internal references / masked numbers. Low = statuses and times.
+A12=Key words | B12=PK = primary key. FK = link to another table. UNIQUE = no two rows may share the value. CHECK = a rule the database enforces. Trigger = code the database runs automatically.
+A13=Common rules | B13=All links to users use ON DELETE RESTRICT (never CASCADE). Full Aadhaar / PAN numbers are never stored - masked values only. All test data is synthetic.
+A14=Not final | B14=Items needing tech-lead, mentor or legal decisions are listed in 'Open Items'.
+A16=Table colours
+A17=core.users
+A18=core.auth_identities
+A19=core.user_contacts
+A20=core.user_verifications
+A21=core.user_otp_challenges
+A22=core.user_consents
+A23=core.user_status_history
+A25=Sensitivity
+A26=High
+A27=Medium
+A28=Low
+
+SHEET: What Changed [state=]
+A1=What changed - following the DB review
+A2=Green rows in every sheet = new or modified compared with the previous 8-table version. Removed items are listed only here.
+A4=Type | B4=Item | C4=What changed | D4=Source
+A5=Decision | B5=Review vs MoM 05 Nov | C5=Where the DB review and the MoM disagree, the DB review is followed (mentor's latest instruction). MoM items the review does not mention are kept and flagged in Open Items. | D5=Mentor, 06 Nov
+A6=Kept | B6=Key name user_id (review: subject_ref / user_ref) | C6=users.user_id is the random UUID made by the database; every child table links through its own user_id column. Same meaning as the review's subject_ref / user_ref - only the name differs (team decision). | D6=Team decision, 06 Nov
+A7=Added | B7=core.user_verifications (26 columns) | C7=One latest-summary row per user: email, phone, Aadhaar, PAN, age, failure reasons, masked numbers, providers, hashes. | D7=DB review
+A8=Removed | B8=core.contact_verifications, core.kyc_verifications | C8=Merged into core.user_verifications. | D8=DB review
+A9=Added | B9=aadhaar_failure_reason (16 values), pan_failure_reason (13 values) | C9=Back, with rules: reason only when failed / review_required; review_required only for mismatches; too_many_attempts only at 3 tries. | D9=DB review (overrides MoM #1)
+A10=Modified | B10=email_status / phone_status | C10='failed' back: set when an OTP locks after 5 wrong codes; a new OTP sets pending again. | D10=DB review
+A11=Modified | B11=auth_identities.provider | C11=email_otp, phone_otp, google, apple. OTP methods need that contact verified; provider_subject = user_id. | D11=DB review
+A12=Added | B12=auth_identities.unlinked_at, unlink_reason; status unlinked / revoked | C12=Disabled methods kept for audit (4 unlink reasons). | D12=DB review (overrides MoM #2)
+A13=Added | B13=user_otp_challenges.destination_hash | C13=Keyed hash of the address the code was sent to (nullable until confirmed). | D13=DB review
+A14=Modified | B14=aadhaar_provider / pan_provider | C14=aadhaar: digilocker, kyc_vendor. pan: digilocker, protean, kyc_vendor. | D14=DB review
+A15=Added | B15=Review Compliance sheet | C15=Each of the review's 89 Final Schema rows -> our column -> status. | D15=DB review
+A16=Added | B16=Design Rationale + Application Flow sheets | C16=Why each decision, and how it helps database design, system design and the app flow. | D16=Mentor, 06 Nov
+A17=Modified | B17=Access Rules sheet | C17=Each gate now names the function that enforces it and the access_level the app receives. | D17=DB review
+A18=Kept | B18=users.gender (10 values) | C18=Not in the review sheet; kept from the MoM. To confirm Saturday. | D18=MoM 05 Nov
+A19=Kept | B19=aadhaar_hash, pan_hash, hash_key_version | C19=Not in the review sheet; kept from MoM #3 for duplicate checks (aadhaar_hash pending legal). | D19=MoM 05 Nov #3
+A21=Totals | B21=7 tables (was 8), 87 columns (was 86); 34 columns new or modified
+
+SHEET: Review Compliance [state=]
+A1=Review compliance - every row of the DB review 'Final Schema'
+A2=89 review rows. Status: Done = built and tested in 01_core_identity_schema.sql; 'to confirm' = built, waiting for the confirmation the review asks for.
+A4=Table | B4=Column | C4=Review data type | D4=Review action | E4=Review notes | F4=Our implementation | G4=Status | H4=How it is enforced
+A5=core.users | B5=id | C5=BIGINT IDENTITY | D5=RETAIN | E5=Primary key. | F5=BIGINT (identity) | required | G5=Done | H5=Generated always; gaps are normal.
+A6=core.users | B6=subject_ref | C6=UUID | D6=RETAIN | E6=Unique, stable user reference; enforce UNIQUE. | F6=user_id | UUID | required | G6=Done - named user_id | H6=Same column, team name user_id (review: subject_ref). users_user_id_uq; cannot change (users_before_write).
+A7=core.users | B7=account_status | C7=TEXT | D7=RETAIN / CLARIFY | E7=Values: limited, active, suspended, deactivated, deletion_pending, deleted. limited = restricted onboarding/KYC access; active = eligible for main-app access after all gates pass. | F7=TEXT | required | G7=Done | H7=Only through core.change_account_status(); every change is written to user_status_history; active only via the activation guard; deleted is final.
+A8=core.users | B8=verification_status | C8=TEXT | D8=RETAIN / CLARIFY | E8=Overall verification summary; do not use instead of individual verification statuses. | F8=TEXT | required | G8=Done | H8=Set only by trigger verification_sync.
+A9=core.users | B9=timezone | C9=TEXT | D9=RETAIN | E9=User timezone. | F9=TEXT | required | G9=Done | H9=Must exist in pg_timezone_names.
+A10=core.users | B10=age_eligibility_status | C10=TEXT | D10=RETAIN | E10=Values: unknown, eligible, ineligible, review_required. | F10=TEXT | required | G10=Done | H10=Synced from user_verifications.age_eligible; eligible needs DOB and 18+.
+A11=core.users | B11=age_verified_at | C11=TIMESTAMPTZ | D11=RETAIN | E11=Timestamp when age eligibility was verified. | F11=TIMESTAMPTZ | optional | G11=Done | H11=Set by trigger; not in the future.
+A12=core.users | B12=date_of_birth | C12=DATE | D12=RETAIN / LEGAL REVIEW | E12=Optional; user-entered and confirmed by Aadhaar. Obtain legal/privacy approval before storing. | F12=DATE | optional | G12=Done - to confirm | H12=Not in future; locked after age verification; cleared on deletion. LEGAL / PRIVACY APPROVAL REQUIRED before storing (review).
+A13=core.users | B13=created_at | C13=TIMESTAMPTZ | D13=RETAIN | E13=Creation timestamp. | F13=TIMESTAMPTZ | required | G13=Done | H13=When the account was created.
+A14=core.users | B14=updated_at | C14=TIMESTAMPTZ | D14=RETAIN | E14=Last update timestamp. | F14=TIMESTAMPTZ | required | G14=Done | H14=Set by trigger.
+A15=core.users | B15=deleted_at | C15=TIMESTAMPTZ | D15=RETAIN | E15=Soft-deletion timestamp. | F15=TIMESTAMPTZ | optional | G15=Done | H15=Filled exactly when account_status = deleted.
+A16=core.auth_identities | B16=id | C16=BIGINT IDENTITY | D16=RETAIN | E16=Primary key. | F16=BIGINT (identity) | required | G16=Done | H16=Internal row number.
+A17=core.auth_identities | B17=user_ref | C17=UUID | D17=RETAIN / CONSTRAIN | E17=Foreign key to users.subject_ref. | F17=user_id | UUID | required | G17=Done - named user_id | H17=Same column, team name user_id (review: user_ref). ON DELETE RESTRICT.
+A18=core.auth_identities | B18=provider | C18=TEXT | D18=MODIFY | E18=If OTP-only: email_otp, phone_otp, google, apple. If passwords are supported, define that separately; do not store passwords here. | F18=TEXT | required | G18=Done | H18=Fixed list; email_otp / phone_otp need that contact verified first.
+A19=core.auth_identities | B19=provider_subject | C19=TEXT | D19=RETAIN | E19=Provider's stable subject/identifier; unique with provider. | F19=TEXT | required | G19=Done | H19=Not blank; (provider, provider_subject) unique; OTP providers: provider_subject = user_id.
+A20=core.auth_identities | B20=status | C20=TEXT | D20=RETAIN | E20=Values: active, unlinked, revoked. | F20=TEXT | required | G20=Done | H20=active = no unlink fields; unlinked / revoked = unlinked_at + unlink_reason; cannot be re-activated.
+A21=core.auth_identities | B21=linked_at | C21=TIMESTAMPTZ | D21=RETAIN | E21=Identity link timestamp. | F21=TIMESTAMPTZ | required | G21=Done | H21=When the method was linked.
+A22=core.auth_identities | B22=last_login_at | C22=TIMESTAMPTZ | D22=RETAIN | E22=Most recent successful login. | F22=TIMESTAMPTZ | optional | G22=Done | H22=>= linked_at; set by verify_contact_otp for OTP logins.
+A23=core.auth_identities | B23=unlinked_at | C23=TIMESTAMPTZ | D23=RETAIN | E23=Unlink timestamp, where applicable. | F23=TIMESTAMPTZ | optional | G23=Done | H23=>= linked_at; required when not active.
+A24=core.auth_identities | B24=unlink_reason | C24=TEXT | D24=RETAIN | E24=Reason for unlinking. | F24=TEXT | optional | G24=Done | H24=Required when unlinked / revoked.
+A25=core.auth_identities | B25=updated_at | C25=TIMESTAMPTZ | D25=RETAIN | E25=Last update timestamp. | F25=TIMESTAMPTZ | required | G25=Done | H25=Set by trigger.
+A26=core.user_contacts | B26=id | C26=BIGINT IDENTITY | D26=RETAIN | E26=Primary key. | F26=BIGINT (identity) | required | G26=Done | H26=Internal row number.
+A27=core.user_contacts | B27=user_ref | C27=UUID | D27=RETAIN / CONSTRAIN | E27=Foreign key to users.subject_ref. | F27=user_id | UUID | required | G27=Done - named user_id | H27=Same column, team name user_id (review: user_ref). Never changes; ON DELETE RESTRICT.
+A28=core.user_contacts | B28=email | C28=TEXT | D28=RETAIN / CONSTRAIN | E28=Normalize to lowercase and trim whitespace; enforce uniqueness on normalized value. | F28=TEXT | required | G28=Done | H28=Normalised (lower-case, trimmed), valid format, unique (review).
+A29=core.user_contacts | B29=phone_number | C29=TEXT | D29=RETAIN / CONSTRAIN | E29=Store in E.164 format; enforce uniqueness. | F29=TEXT | required | G29=Done | H29=^\+[1-9][0-9]{7,14}$; unique (review).
+A30=core.user_contacts | B30=contact_version | C30=INTEGER NOT NULL DEFAULT 1 | D30=ADD | E30=Increment whenever email or phone changes; use to invalidate stale OTP challenges and reset the affected verification. | F30=INTEGER | required | G30=Done | H30=>= 1; raised only by trigger.
+A31=core.user_contacts | B31=created_at | C31=TIMESTAMPTZ | D31=RETAIN | E31=Creation timestamp. | F31=TIMESTAMPTZ | required | G31=Done | H31=When saved.
+A32=core.user_contacts | B32=updated_at | C32=TIMESTAMPTZ | D32=RETAIN | E32=Last update timestamp. | F32=TIMESTAMPTZ | required | G32=Done | H32=Set by trigger.
+A33=core.user_verifications | B33=id | C33=BIGINT IDENTITY | D33=RETAIN | E33=Primary key. | F33=BIGINT (identity) | required | G33=Done | H33=Internal row number.
+A34=core.user_verifications | B34=user_ref | C34=UUID | D34=RETAIN / CONSTRAIN | E34=Foreign key to users.subject_ref; enforce UNIQUE for one latest summary per user. | F34=user_id | UUID | required | G34=Done - named user_id | H34=Same column, team name user_id (review: user_ref). Never changes.
+A35=core.user_verifications | B35=email_status | C35=TEXT | D35=RETAIN | E35=Values: not_started, pending, verified, failed. | F35=TEXT | required | G35=Done | H35=pending when an OTP is sent; verified on the right code; failed when the OTP locks after 5 wrong codes. Attempt details live in user_otp_challenges (review).
+A36=core.user_verifications | B36=email_verified_at | C36=TIMESTAMPTZ | D36=RETAIN | E36=Email verification timestamp. | F36=TIMESTAMPTZ | optional | G36=Done | H36=Filled exactly when verified; cleared when the email changes.
+A37=core.user_verifications | B37=phone_status | C37=TEXT | D37=RETAIN | E37=Values: not_started, pending, verified, failed. | F37=TEXT | required | G37=Done | H37=Can start only after email is verified.
+A38=core.user_verifications | B38=phone_verified_at | C38=TIMESTAMPTZ | D38=RETAIN | E38=Phone verification timestamp. | F38=TIMESTAMPTZ | optional | G38=Done | H38=Filled exactly when verified; cleared when the phone changes.
+A39=core.user_verifications | B39=aadhaar_status | C39=TEXT | D39=RETAIN | E39=Values: not_started, pending, verified, failed, review_required. | F39=TEXT | required | G39=Done | H39=Starts only after email + phone verified and kyc_verification consent granted.
+A40=core.user_verifications | B40=aadhaar_failure_reason | C40=TEXT | D40=RETAIN | E40=Latest Aadhaar verification failure reason. | F40=TEXT | optional | G40=Done | H40=Required exactly when failed / review_required; review only for name / DOB mismatch; too_many_attempts only at 3 tries.
+A41=core.user_verifications | B41=aadhaar_attempt_count | C41=SMALLINT | D41=RETAIN / CONSTRAIN | E41=Attempt count; proposed limit 0–3, confirm with provider. | F41=SMALLINT | required | G41=Done | H41=0 only before start; 3rd failed try -> failed + too_many_attempts.
+A42=core.user_verifications | B42=aadhaar_verified_at | C42=TIMESTAMPTZ | D42=RETAIN | E42=Aadhaar verification timestamp. | F42=TIMESTAMPTZ | optional | G42=Done | H42=Only when verified.
+A43=core.user_verifications | B43=aadhaar_masked | C43=TEXT | D43=RETAIN | E43=Masked Aadhaar only: XXXXXXXX followed by last 4 digits. | F43=TEXT | optional | G43=Done | H43=^X{8}[0-9]{4}$; required when verified. Full number never stored.
+A44=core.user_verifications | B44=aadhaar_provider | C44=TEXT | D44=RETAIN | E44=Values proposed: digilocker, kyc_vendor; confirm provider options. | F44=TEXT | optional | G44=Done | H44=Required once Aadhaar has started.
+A45=core.user_verifications | B45=aadhaar_provider_ref | C45=TEXT | D45=RETAIN | E45=Provider-side reference; do not store full Aadhaar. | F45=TEXT | optional | G45=Done | H45=Unique per provider.
+A46=core.user_verifications | B46=age_eligible | C46=BOOLEAN | D46=RETAIN | E46=Eligibility result derived from approved age-verification process. | F46=BOOLEAN | optional | G46=Done | H46=Filled exactly when Aadhaar is verified.
+A47=core.user_verifications | B47=pan_status | C47=TEXT | D47=RETAIN | E47=Values: not_started, pending, verified, failed, review_required. | F47=TEXT | required | G47=Done | H47=Starts only after Aadhaar started; verified only after Aadhaar verified.
+A48=core.user_verifications | B48=pan_failure_reason | C48=TEXT | D48=RETAIN | E48=Latest PAN verification failure reason. | F48=TEXT | optional | G48=Done | H48=Required exactly when failed / review_required; review only for mismatch reasons; too_many_attempts only at 3.
+A49=core.user_verifications | B49=pan_attempt_count | C49=SMALLINT | D49=RETAIN / CONSTRAIN | E49=Attempt count; proposed limit 0–3, confirm with provider. | F49=SMALLINT | required | G49=Done | H49=Same rules as Aadhaar.
+A50=core.user_verifications | B50=pan_verified_at | C50=TIMESTAMPTZ | D50=RETAIN | E50=PAN verification timestamp. | F50=TIMESTAMPTZ | optional | G50=Done | H50=After aadhaar_verified_at.
+A51=core.user_verifications | B51=pan_masked | C51=TEXT | D51=RETAIN | E51=Masked PAN only; use agreed masking format. | F51=TEXT | optional | G51=Done | H51=^XXXPX[0-9]{4}[A-Z]$; individual PANs only.
+A52=core.user_verifications | B52=pan_provider | C52=TEXT | D52=ADD | E52=Provider identifier; define allowed provider values. | F52=TEXT | optional | G52=Done | H52=Required once PAN has started.
+A53=core.user_verifications | B53=pan_provider_ref | C53=TEXT | D53=ADD / CONFIRM | E53=Provider-side reference for PAN verification. | F53=TEXT | optional | G53=Done - to confirm | H53=Unique per provider.
+A54=core.user_verifications | B54=created_at | C54=TIMESTAMPTZ | D54=RETAIN | E54=Creation timestamp. | F54=TIMESTAMPTZ | required | G54=Done | H54=When the row was created.
+A55=core.user_verifications | B55=updated_at | C55=TIMESTAMPTZ | D55=RETAIN | E55=Last update timestamp. | F55=TIMESTAMPTZ | required | G55=Done | H55=Set by trigger.
+A56=core.user_verifications | B56=email_failure_reason | C56=— | D56=REMOVE | E56=Move OTP-specific failure/attempt lifecycle to user_otp_challenges; retain only current email status here. | F56=- | G56=Done - removed | H56=Column does not exist in our table
+A57=core.user_verifications | B57=phone_failure_reason | C57=— | D57=REMOVE | E57=Move OTP-specific failure/attempt lifecycle to user_otp_challenges; retain only current phone status here. | F57=- | G57=Done - removed | H57=Column does not exist in our table
+A58=core.user_verifications | B58=otp_channel | C58=— | D58=REMOVE | E58=OTP challenge data belongs in user_otp_challenges. | F58=- | G58=Done - removed | H58=Column does not exist in our table (lives in user_otp_challenges)
+A59=core.user_verifications | B59=otp_hmac | C59=— | D59=REMOVE | E59=Move keyed OTP HMAC to user_otp_challenges; never store plaintext OTP. | F59=- | G59=Done - removed | H59=Column does not exist in our table (lives in user_otp_challenges)
+A60=core.user_verifications | B60=otp_expires_at | C60=— | D60=REMOVE | E60=Move OTP expiry to user_otp_challenges. | F60=- | G60=Done - removed | H60=Column does not exist in our table (lives in user_otp_challenges)
+A61=core.user_verifications | B61=otp_attempts | C61=— | D61=REMOVE | E61=Move OTP attempt count to user_otp_challenges. | F61=- | G61=Done - removed | H61=Column does not exist in our table (lives in user_otp_challenges)
+A62=core.user_otp_challenges | B62=id | C62=BIGINT IDENTITY | D62=ADD TABLE / ADD | E62=Primary key. | F62=BIGINT (identity) | required | G62=Done | H62=Internal row number.
+A63=core.user_otp_challenges | B63=user_ref | C63=UUID | D63=ADD TABLE / ADD | E63=Foreign key to users.subject_ref. | F63=user_id | UUID | required | G63=Done - named user_id | H63=Same column, team name user_id (review: user_ref). ON DELETE RESTRICT.
+A64=core.user_otp_challenges | B64=channel | C64=TEXT | D64=ADD TABLE / ADD | E64=Values: email, phone. Maintain independent challenges for each channel. | F64=TEXT | required | G64=Done | H64=Fixed list.
+A65=core.user_otp_challenges | B65=purpose | C65=TEXT | D65=ADD TABLE / ADD | E65=Values proposed: signup, login, contact_change, account_recovery. | F65=TEXT | required | G65=Done | H65=Fixed list.
+A66=core.user_otp_challenges | B66=destination_hash | C66=BYTEA | D66=ADD TABLE / ADD / CONFIRM | E66=Keyed hash of normalized destination if needed; confirm necessity and key management. | F66=BYTEA | optional | G66=Done - to confirm | H66=Exactly 32 bytes when present; cannot change.
+A67=core.user_otp_challenges | B67=contact_version | C67=INTEGER | D67=ADD TABLE / ADD | E67=Must match current user_contacts.contact_version. | F67=INTEGER | required | G67=Done | H67=Must equal user_contacts.contact_version when sent and verified.
+A68=core.user_otp_challenges | B68=otp_hmac | C68=BYTEA | D68=ADD TABLE / ADD | E68=Keyed HMAC only; never store plaintext OTP. | F68=BYTEA | required | G68=Done | H68=HMAC-SHA256 with the OTP key (Vault); exactly 32 bytes.
+A69=core.user_otp_challenges | B69=status | C69=TEXT | D69=ADD TABLE / ADD | E69=Values: pending, verified, expired, locked, cancelled. | F69=TEXT | required | G69=Done | H69=One pending OTP per user + channel + purpose.
+A70=core.user_otp_challenges | B70=attempt_count | C70=SMALLINT | D70=ADD TABLE / ADD | E70=Proposed maximum 5 incorrect attempts; confirm security policy. | F70=SMALLINT | required | G70=Done | H70=At 5 the OTP is locked and that channel becomes failed.
+A71=core.user_otp_challenges | B71=sent_at | C71=TIMESTAMPTZ | D71=ADD TABLE / ADD | E71=Timestamp challenge was sent. | F71=TIMESTAMPTZ | required | G71=Done | H71=When first sent.
+A72=core.user_otp_challenges | B72=expires_at | C72=TIMESTAMPTZ | D72=ADD TABLE / ADD | E72=Proposed expiry: 10 minutes. | F72=TIMESTAMPTZ | required | G72=Done | H72=Set by trigger; cannot be edited.
+A73=core.user_otp_challenges | B73=verified_at | C73=TIMESTAMPTZ | D73=ADD TABLE / ADD | E73=Timestamp challenge was successfully verified. | F73=TIMESTAMPTZ | optional | G73=Done | H73=Exactly when verified; before expires_at.
+A74=core.user_otp_challenges | B74=last_sent_at | C74=TIMESTAMPTZ | D74=ADD TABLE / ADD | E74=Use to enforce proposed 60-second resend cooldown. | F74=TIMESTAMPTZ | required | G74=Done | H74=>= sent_at; resend blocked within 60 s.
+A75=core.user_otp_challenges | B75=created_at | C75=TIMESTAMPTZ | D75=ADD TABLE / ADD | E75=Creation timestamp. | F75=TIMESTAMPTZ | required | G75=Done | H75=When the row was created.
+A76=core.user_otp_challenges | B76=updated_at | C76=TIMESTAMPTZ | D76=ADD TABLE / ADD | E76=Last update timestamp. | F76=TIMESTAMPTZ | required | G76=Done | H76=Set by trigger.
+A77=core.user_consents | B77=id | C77=BIGINT IDENTITY | D77=RETAIN | E77=Primary key. | F77=BIGINT (identity) | required | G77=Done | H77=Internal row number.
+A78=core.user_consents | B78=user_ref | C78=UUID | D78=RETAIN / CONSTRAIN | E78=Foreign key to users.subject_ref. | F78=user_id | UUID | required | G78=Done - named user_id | H78=Same column, team name user_id (review: user_ref). ON DELETE RESTRICT.
+A79=core.user_consents | B79=consent_type | C79=TEXT | D79=RETAIN | E79=Values: terms_of_service, privacy_notice, kyc_verification, marketing. | F79=TEXT | required | G79=Done | H79=Fixed list.
+A80=core.user_consents | B80=policy_version | C80=TEXT | D80=RETAIN | E80=Version of the policy/notice presented. | F80=TEXT | required | G80=Done | H80=^v[0-9]{1,3}\.[0-9]{1,3}$.
+A81=core.user_consents | B81=decision | C81=TEXT | D81=RETAIN | E81=Values: granted, declined, withdrawn. Preserve each decision as history. | F81=TEXT | required | G81=Done | H81=withdrawn only after granted.
+A82=core.user_consents | B82=source | C82=TEXT | D82=RETAIN | E82=Values: signup_flow, settings, admin_console, api. | F82=TEXT | required | G82=Done | H82=Fixed list.
+A83=core.user_consents | B83=captured_at | C83=TIMESTAMPTZ | D83=RETAIN | E83=Timestamp consent decision was captured. | F83=TIMESTAMPTZ | required | G83=Done | H83=Later than the previous decision of that type; not in future.
+A84=core.user_status_history | B84=id | C84=BIGINT IDENTITY | D84=RETAIN | E84=Primary key. | F84=BIGINT (identity) | required | G84=Done | H84=Internal row number.
+A85=core.user_status_history | B85=user_ref | C85=UUID | D85=RETAIN / CONSTRAIN | E85=Foreign key to users.subject_ref. | F85=user_id | UUID | required | G85=Done - named user_id | H85=Same column, team name user_id (review: user_ref). ON DELETE RESTRICT.
+A86=core.user_status_history | B86=from_status | C86=TEXT | D86=RETAIN | E86=Previous account lifecycle status. | F86=TEXT | optional | G86=Done | H86=Equals the previous row's to_status.
+A87=core.user_status_history | B87=to_status | C87=TEXT | D87=RETAIN | E87=New account lifecycle status. | F87=TEXT | required | G87=Done | H87=Only moves in the transition matrix.
+A88=core.user_status_history | B88=actor_type | C88=TEXT | D88=RETAIN | E88=Values: user, admin, support, system. | F88=TEXT | required | G88=Done | H88=Rules decide which actor may use which reason.
+A89=core.user_status_history | B89=actor_id | C89=TEXT | D89=RETAIN | E89=Identifier of the actor, where applicable. | F89=TEXT | optional | G89=Done | H89=Required for user / admin / support; empty for system; ID characters only, max 100.
+A90=core.user_status_history | B90=reason_code | C90=TEXT | D90=RETAIN | E90=Document allowed transition reason codes. | F90=TEXT | required | G90=Done | H90=Must fit the transition matrix and the actor.
+A91=core.user_status_history | B91=effective_until | C91=TIMESTAMPTZ | D91=RETAIN | E91=End of temporary status, where applicable. | F91=TIMESTAMPTZ | optional | G91=Done | H91=Required for deletion_pending; only for deletion_pending / suspended; in the future.
+A92=core.user_status_history | B92=request_id | C92=TEXT | D92=RETAIN | E92=Request/correlation identifier. | F92=TEXT | optional | G92=Done | H92=Never free text.
+A93=core.user_status_history | B93=created_at | C93=TIMESTAMPTZ | D93=RETAIN | E93=Timestamp status transition was recorded. | F93=TIMESTAMPTZ | required | G93=Done | H93=When it happened.
+A95=Summary
+A96=Done | B96=73
+A97=Done - named user_id | B97=7
+A98=Done - to confirm | B98=3
+A99=Done - removed | B99=6
+A100=MISSING | B100=0
+A101=NOT DONE | B101=0
+A103=Columns we have that the review sheet does not list (kept from the MoM, to confirm):
+A104=core.users | B104=gender | E104=Profile display and matching filters.
+A105=core.user_verifications | B105=aadhaar_hash | E105=One Aadhaar = one account (detects already_used).
+A106=core.user_verifications | B106=pan_hash | E106=One PAN = one account.
+A107=core.user_verifications | B107=hash_key_version | E107=Key rotation without losing duplicate checks.
+
+SHEET: Design Rationale [state=]
+A1=Design rationale - why we built it this way
+A2=For each decision: what we do, where it comes from, and how it improves the database design, the system design and the application flow.
+A4=Decision | B4=What we do | C4=Basis (review / MoM) | D4=Database design benefit | E4=System design benefit | F4=Application flow benefit
+A5=Two keys: id + user_id | B5=BIGINT id inside users; random UUID user_id shared with every table and the app | C5=Review: unique, stable user reference (review calls it subject_ref; team name user_id) | D5=Small fast PK; one stable FK target for all teams | E5=No guessable IDs leave the database; safe across services and exports | F5=App and APIs always use one key that never changes
+A6=One user_verifications row per user | B6=Latest email, phone, Aadhaar, PAN and age result in one row | C6=Review: user_verifications = latest outcomes | D6=One row to read and lock; CHECKs can compare steps (PAN after Aadhaar) | E6=Single source of truth for 'how verified is this user' | F6=One read decides which screen to show
+A7=OTP lifecycle in its own table | B7=user_otp_challenges keeps every code sent, with status and attempts | C7=Review: move OTP fields out; separate lifecycle per channel | D7=No overwriting of earlier tries; small verification row | E7=Limits (60 s, 5 tries, 10 min) enforced in one place; abuse audit | F7=Resend, lock, expire and recovery work the same for email and phone
+A8=contact_version | B8=Counter on user_contacts copied into every OTP | C8=Review: invalidate stale OTPs after changes | D8=Integer comparison instead of storing addresses again | E8=An OTP sent to an old address can never verify the new one | F8=Changing email / phone safely resets only that step
+A9=destination_hash | B9=Keyed hash of the address the OTP was sent to (optional) | C9=Review: add / confirm necessity | D9=Proof without a second copy of personal data | E9=Abuse checks (many OTPs to one address) without reading plain contacts | F9=Support can confirm 'the code went to this address'
+A10=Failure reasons kept | B10=aadhaar_failure_reason / pan_failure_reason with fixed lists and rules | C10=Review: retain (overrides MoM #1) | D10=Fixed lists + CHECK rules keep data clean (reason only when failed / review) | E10=Analytics on where KYC drops; provider error monitoring | F10=App shows the right retry message; support knows what to fix
+A11=Attempt limits | B11=0-3 KYC tries; 3rd failed try -> too_many_attempts | C11=Review: proposed 0-3 | D11=Enforced by CHECK + trigger, not only by the app | E11=Protects provider quota and cost | F11=Clear stop point and message for the user
+A12=Masked numbers + keyed hashes | B12=aadhaar_masked / pan_masked; aadhaar_hash / pan_hash (HMAC) | C12=Review: masked only; MoM #3: hash Aadhaar + PAN | D12=UNIQUE on hashes catches duplicate documents | E12=Full Aadhaar / PAN never stored; key rotation via hash_key_version | F12=already_used detected instantly
+A13=Sign-in providers incl. OTP | B13=email_otp, phone_otp, google, apple; no passwords | C13=Review: OTP-only provider list | D13=One table for all sign-in methods; OTP methods tied to the user, not an address | E13=No password storage risk | F13=Users without Google / Apple can still sign in
+A14=Unlinked / revoked kept | B14=status active / unlinked / revoked + unlinked_at + unlink_reason | C14=Review: retain (overrides MoM #2) | D14=History stays; no hard delete | E14=Security audit of removed methods | F14=Support can explain why a method stopped working
+A15=Status only through a routine | B15=core.change_account_status() + transition matrix + actor rules | C15=Review: lifecycle values + documented reason codes | D15=Impossible moves rejected by CHECK | E15=Every change audited with actor and request_id | F15=Moderation, appeals and deletion follow one path
+A16=Activation guard + access functions | B16=user_can_login, user_access_ready, user_access_level | C16=Review: Access Rules sheet | D16=Rules live next to the data | E16=Every service gets the same answer | F16=App asks one function which screen to show
+A17=Append-only consents + history | B17=No UPDATE / DELETE; latest consent via a view | C17=Review: preserve each decision as history | D17=Proof cannot be edited | E17=DPDP evidence of consent and status changes | F17=Settings shows the current choice; history stays for audit
+A18=ON DELETE RESTRICT everywhere | B18=No CASCADE; accounts closed by status + erase routine | C18=Team rule | D18=No accidental mass deletes | E18=Retention and legal holds can be honoured | F18=Deletion is a controlled flow with a grace period
+
+SHEET: Application Flow [state=]
+A1=Application flow - what the database does at each step
+A2=From signup to main app and later changes. access_level = what core.user_access_level() returns at that point.
+A4=Step | B4=User does | C4=Database does | D4=Tables | E4=Trigger / routine | F4=access_level
+A5=1 | B5=Opens the app and signs up (DOB, gender, time zone) | C5=Creates the account with a random user_id; status limited; writes the signup history row; creates the empty verification row | D5=users, user_status_history, user_verifications | E5=users_after_write | F5=contact_verification
+A6=2 | B6=Enters email + phone | C6=Stores normalised contacts with contact_version 1 | D6=user_contacts | E6=user_contacts_before_write | F6=contact_verification
+A7=3 | B7=Accepts terms + privacy (+ KYC consent, optional marketing) | C7=Appends one row per decision with policy version and source | D7=user_consents | E7=user_consents_guard | F7=contact_verification
+A8=4 | B8=Receives and enters the email code | C8=One pending challenge (10-min expiry, 60-s resend); checks the code hash; email_status -> verified (5 wrong -> locked -> failed) | D8=user_otp_challenges, user_verifications | E8=issue_contact_otp / verify_contact_otp | F8=contact_verification
+A9=5 | B9=Receives and enters the SMS code | C9=Same as email, allowed only after email is verified; phone_status -> verified | D9=user_otp_challenges, user_verifications | E9=issue_contact_otp / verify_contact_otp | F9=onboarding_kyc (can log in)
+A10=6 | B10=Optional: turns on OTP / Google / Apple sign-in | C10=Adds an active sign-in method (OTP only with that contact verified) | D10=auth_identities | E10=auth_identities_before_write | F10=onboarding_kyc
+A11=7 | B11=Verifies Aadhaar (DigiLocker) | C11=Allowed only after email + phone + KYC consent; stores status, masked number, provider ref, age_eligible, failure reason; 3 tries max | D11=user_verifications, users | E11=user_verifications_before_write, verification_sync | F11=onboarding_kyc / kyc_retry_or_review
+A12=8 | B12=Verifies PAN | C12=Allowed after Aadhaar started; verified only after Aadhaar verified; masked PAN + hash; failure reason | D12=user_verifications, users | E12=verification_sync | F12=onboarding_kyc / kyc_retry_or_review
+A13=9 | B13=(automatic) All checks pass | C13=Backend calls change_account_status(active, verification_completed); the activation guard re-checks every gate | D13=users, user_status_history | E13=change_account_status + activation guard | F13=main_app
+A14=10 | B14=Later: signs in with a code | C14=Login OTP verified -> last_login_at on the email_otp / phone_otp method | D14=user_otp_challenges, auth_identities | E14=verify_contact_otp | F14=main_app
+A15=11 | B15=Later: changes email or phone | C15=contact_version + 1; that check reset; old OTPs cancelled; active -> limited (verification_reset); re-verify with a contact_change OTP | D15=user_contacts, user_verifications, user_otp_challenges, users, user_status_history | E15=user_contacts_reset_verification | F15=contact_verification -> main_app again
+A16=12 | B16=Moderation, appeal, deactivation, deletion | C16=Only through change_account_status: matrix + actor checks + history; daily job ends grace periods and temporary suspensions | D16=users, user_status_history | E16=change_account_status, run_status_expiry_job | F16=blocked_lifecycle or back to main_app
+
+SHEET: Access Rules [state=]
+A1=Access rules (DB review)
+A2=What the user may do at each stage, which database function enforces it, and the access_level word the app receives from core.user_access_level().
+A4=Gate / condition | B4=Required state | C4=Access outcome | D4=Enforced by | E4=access_level | F4=Change (DB review)
+A5=1. Email + phone verification | B5=email_status and phone_status = verified | C5=Login permitted (subject to account lifecycle status). | D5=core.user_can_login() | E5=contact_verification until passed | F5=Modified: function + access_level added
+A6=2. KYC incomplete | B6=Aadhaar and / or PAN not verified | C6=Restricted onboarding / KYC access only; no main-app access. | D6=account_status = limited | E6=onboarding_kyc | F6=Modified: function + access_level added
+A7=3. Main-app eligibility | B7=Email + phone + Aadhaar + PAN verified; age eligible; required consents granted; verification_status = verified; account_status = active | C7=Main-app access permitted. | D7=core.user_access_ready() + activation guard in core.change_account_status() | E7=main_app | F7=Modified: function + access_level added
+A8=4. Review / failed checks | B8=Any required KYC status = review_required or failed | C8=Main-app access blocked; route to retry or review. | D8=verification_status rejected / review_required | E8=kyc_retry_or_review | F8=Modified: function + access_level added
+A9=5. Lifecycle restriction | B9=account_status in suspended, deactivated, deletion_pending, deleted | C9=Normal login and main-app access blocked. | D9=core.user_can_login() = false | E9=blocked_lifecycle | F9=Modified: function + access_level added
+
+SHEET: Tables [state=]
+A1=Tables overview
+A2=The 7 tables in schema core. 'Columns' is counted live from the Data Dictionary sheet. Green = new / modified.
+A4=# | B4=Table | C4=What it stores | D4=One row means | E4=Columns | F4=Who writes it | G4=Append-only? | H4=On account deletion | I4=DB review action | J4=Status | K4=Change (DB review)
+A5=1 | B5=core.users | C5=The account: lifecycle status, overall verification summary, age result, date of birth and gender. No contact details, no documents. | D5=One row per account | E5=12 | F5=Backend (status only through core.change_account_status) | G5=No | H5=Kept as a tombstone: id, user_id, account_status = deleted, deleted_at. date_of_birth cleared. | I5=RETAIN | J5=Built + tested
+A6=2 | B6=core.auth_identities | C6=How a user signs in: Google, Apple, email OTP or phone OTP. Active, unlinked or revoked (kept for audit). | D6=One row per sign-in method per user | E6=10 | F6=Backend auth service | G6=No | H6=Kept with status revoked / unlinked for audit. | I6=MODIFY (providers for OTP-only login) | J6=Built + tested | K6=Modified: providers email_otp / phone_otp added; status active / unlinked / revoked; unlinked_at + unlink_reason back (DB review)
+A7=3 | B7=core.user_contacts | C7=The user's email address and phone number, plus contact_version (goes up on every change). | D7=One row per user | E7=7 | F7=Backend | G7=No | H7=Hard-deleted by the erase routine. | I7=MODIFY (contact_version) | J7=Built + tested
+A8=4 | B8=core.user_verifications | C8=Latest result of every check: email, phone, Aadhaar, PAN and age, with failure reasons, masked numbers and providers. | D8=One row per user | E8=26 | F8=Backend (OTP routine, DigiLocker / PAN vendor results) | G8=No | H8=KYC result kept 1 year after deletion, then hard-deleted. | I8=MODIFY (OTP fields moved to user_otp_challenges) | J8=Built + tested | K8=New single table: replaces contact_verifications + kyc_verifications; failure reasons + failed statuses back (DB review)
+A9=5 | B9=core.user_otp_challenges | C9=Every OTP sent for email or phone: purpose, destination hash, code hash, tries, expiry, resend time, result. | D9=One row per OTP sent | E9=15 | F9=Backend (OTP routine) | G9=No (history kept 30 days) | H9=Hard-deleted; rows older than 30 days purged daily. | I9=ADD NEW TABLE | J9=Built + tested | K9=Modified: destination_hash added (DB review)
+A10=6 | B10=core.user_consents | C10=History of every consent decision (terms, privacy, KYC, marketing) with policy version. | D10=One row per decision | E10=7 | F10=Backend (insert only) | G10=Yes - no UPDATE / DELETE | H10=Kept as proof of consent. | I10=RETAIN | J10=Built + tested
+A11=7 | B11=core.user_status_history | C11=History of every account_status change: from, to, who, why, until when, request. | D11=One row per status change | E11=10 | F11=Database trigger only (via core.change_account_status) | G11=Yes - no UPDATE / DELETE / direct INSERT | H11=Kept (no personal data in it). | I11=RETAIN | J11=Built + tested
+D12=Total columns | E12=87
+
+SHEET: Data Dictionary [state=]
+A1=Data dictionary - every column
+A2=One row per column. 'Possible values' shows exactly what the database accepts. Filter by Table to see one table.
+A4=Table | B4=# | C4=Column | D4=Data type | E4=Required | F4=Default | G4=Key | H4=Possible values | I4=What it stores | J4=Why we need it | K4=Example | L4=Rules enforced | M4=Sensitivity | N4=Change (DB review)
+A5=core.users | B5=1 | C5=id | D5=BIGINT (identity) | E5=Yes | F5=auto number | G5=PK | H5=1, 2, 3 ... (never reused) | I5=Internal row number (only inside users). | J5=Fast primary key for admin screens and debugging; never shared, so it reveals nothing. | K5=2 | L5=Generated always; gaps are normal. | M5=Low
+A6=core.users | B6=2 | C6=user_id | D6=UUID | E6=Yes | F6=gen_random_uuid() | G6=UNIQUE (FK target for every table) | H6=Random UUID made by the database | I6=Unique, stable user reference. Every other table points here (column user_id). | J6=Safe to share with other tables, teams and the app: random, not guessable, never changes, survives deletion. | K6=1c6e5515-f6ba-47cd-9ee0-eb937103d129 | L6=users_user_id_uq; cannot change (users_before_write). | M6=Medium
+A7=core.users | B7=3 | C7=account_status | D7=TEXT | E7=Yes | F7='limited' | H7=limited, active, suspended, deactivated, deletion_pending, deleted | I7=Where the account is in its life cycle. | J7=Drives what the user may do (Access Rules). limited = onboarding / KYC only; active = main app after all gates. | K7=active | L7=Only through core.change_account_status(); every change is written to user_status_history; active only via the activation guard; deleted is final. | M7=Low
+A8=core.users | B8=4 | C8=verification_status | D8=TEXT | E8=Yes | F8='pending' | H8=pending, verified, rejected, review_required | I8=Overall summary of the four checks. | J8=Quick filter for lists and dashboards. Access decisions use the individual statuses in user_verifications, not this summary (review). | K8=verified | L8=Set only by trigger verification_sync. | M8=Low
+A9=core.users | B9=5 | C9=timezone | D9=TEXT | E9=Yes | F9='Asia/Kolkata' | H9=IANA time zone name | I9=User's time zone. | J9=Correct local times, notification quiet hours, scheduling. | K9=Asia/Kolkata | L9=Must exist in pg_timezone_names. | M9=Low
+A10=core.users | B10=6 | C10=age_eligibility_status | D10=TEXT | E10=Yes | F10='unknown' | H10=unknown, eligible, ineligible, review_required | I10=Result of the 18+ check. | J10=Keeps under-18 users away from adults; gate for main-app access. | K10=eligible | L10=Synced from user_verifications.age_eligible; eligible needs DOB and 18+. | M10=Low
+A11=core.users | B11=7 | C11=age_verified_at | D11=TIMESTAMPTZ | E11=No | F11=NULL | H11=Date-time or empty | I11=When age was confirmed from Aadhaar. | J11=Proof of the age check; locks the DOB. | K11=2026-10-02 11:07+05:30 | L11=Set by trigger; not in the future. | M11=Low
+A12=core.users | B12=8 | C12=date_of_birth | D12=DATE | E12=No | F12=NULL | H12=1900-01-01 to today | I12=Date of birth (entered, confirmed by Aadhaar). | J12=Age is calculated from it, never stored. Optional (review). | K12=2000-11-02 | L12=Not in future; locked after age verification; cleared on deletion. LEGAL / PRIVACY APPROVAL REQUIRED before storing (review). | M12=High
+A13=core.users | B13=9 | C13=created_at | D13=TIMESTAMPTZ | E13=Yes | F13=now() | H13=Date-time | I13=When the account was created. | J13=Timeline and reporting. | K13=2026-10-02 11:00+05:30 | M13=Low
+A14=core.users | B14=10 | C14=updated_at | D14=TIMESTAMPTZ | E14=Yes | F14=now() | H14=Date-time | I14=When the row last changed. | J14=Change tracking. | K14=2026-11-03 10:05+05:30 | L14=Set by trigger. | M14=Low
+A15=core.users | B15=11 | C15=deleted_at | D15=TIMESTAMPTZ | E15=No | F15=NULL | H15=Date-time or empty | I15=Soft-deletion time. | J15=Proof of deletion; starts retention clocks. | K15=2026-07-01 09:30+05:30 | L15=Filled exactly when account_status = deleted. | M15=Low
+A16=core.users | B16=12 | C16=gender | D16=TEXT | E16=Yes | F16='prefer_not_to_say' | H16=male, female, transgender_man, transgender_woman, non_binary, genderqueer, genderfluid, agender, other, prefer_not_to_say | I16=User's gender (MoM 05 Nov - not in the review sheet). | J16=Profile display and matching filters. | K16=female | L16=Fixed list (users_gender_ck). | M16=High
+A17=core.auth_identities | B17=1 | C17=id | D17=BIGINT (identity) | E17=Yes | F17=auto number | G17=PK | H17=1, 2, 3 ... | I17=Internal row number. | J17=Primary key. | K17=16 | M17=Low
+A18=core.auth_identities | B18=2 | C18=user_id | D18=UUID | E18=Yes | G18=FK -> users.user_id | H18=An existing users.user_id | I18=Which user this sign-in method belongs to. | J18=Links the method to the account. | K18=9c3246df-... | L18=ON DELETE RESTRICT. | M18=Medium
+A19=core.auth_identities | B19=3 | C19=provider | D19=TEXT | E19=Yes | H19=email_otp, phone_otp, google, apple | I19=Sign-in method. | J19=OTP-only login (review): users without Google / Apple can sign in with an email or SMS code. No passwords are stored anywhere. | K19=google | L19=Fixed list; email_otp / phone_otp need that contact verified first. | M19=Low | N19=Modified: email_otp, phone_otp added (DB review - OTP-only login)
+A20=core.auth_identities | B20=4 | C20=provider_subject | D20=TEXT | E20=Yes | G20=UNIQUE with provider | H20=Google / Apple ID; for OTP providers = user_id | I20=The identity as the provider knows it. | J20=Matches the person on every login. OTP methods point to the user (their current verified contact), so a contact change does not break login. | K20=108234567891234567890 | L20=Not blank; (provider, provider_subject) unique; OTP providers: provider_subject = user_id. | M20=High | N20=Modified: for OTP providers = user_id (DB review)
+A21=core.auth_identities | B21=5 | C21=status | D21=TEXT | E21=Yes | F21='active' | H21=active, unlinked, revoked | I21=State of the method. | J21=Disabled methods stay for audit instead of being deleted (review). | K21=active | L21=active = no unlink fields; unlinked / revoked = unlinked_at + unlink_reason; cannot be re-activated. | M21=Low | N21=Modified: active, unlinked, revoked (DB review overrides MoM #2)
+A22=core.auth_identities | B22=6 | C22=linked_at | D22=TIMESTAMPTZ | E22=Yes | F22=now() | H22=Date-time | I22=When the method was linked. | J22=Timeline. | K22=2026-10-02 11:00+05:30 | M22=Low
+A23=core.auth_identities | B23=7 | C23=last_login_at | D23=TIMESTAMPTZ | E23=No | F23=NULL | H23=Date-time or empty | I23=Last successful login with this method. | J23=Security: spot unused or suspicious methods. | K23=2026-11-03 09:01+05:30 | L23=>= linked_at; set by verify_contact_otp for OTP logins. | M23=Low | N23=Modified: also set by OTP login
+A24=core.auth_identities | B24=8 | C24=unlinked_at | D24=TIMESTAMPTZ | E24=No | F24=NULL | H24=Date-time or empty | I24=When it was unlinked / revoked. | J24=Audit. | K24=2026-10-20 14:00+05:30 | L24=>= linked_at; required when not active. | M24=Low | N24=Back (DB review overrides MoM #2)
+A25=core.auth_identities | B25=9 | C25=unlink_reason | D25=TEXT | E25=No | F25=NULL | H25=user_request, security, admin_action, provider_revoked | I25=Why it was unlinked / revoked. | J25=Audit and support. | K25=user_request | L25=Required when unlinked / revoked. | M25=Low | N25=Back (DB review overrides MoM #2)
+A26=core.auth_identities | B26=10 | C26=updated_at | D26=TIMESTAMPTZ | E26=Yes | F26=now() | H26=Date-time | I26=Last change. | J26=Change tracking. | K26=2026-11-03 09:01+05:30 | L26=Set by trigger. | M26=Low
+A27=core.user_contacts | B27=1 | C27=id | D27=BIGINT (identity) | E27=Yes | F27=auto number | G27=PK | H27=1, 2, 3 ... | I27=Internal row number. | J27=Primary key. | K27=3 | M27=Low
+A28=core.user_contacts | B28=2 | C28=user_id | D28=UUID | E28=Yes | G28=FK -> users.user_id, UNIQUE | H28=An existing users.user_id | I28=Which user. | J28=Exactly one contact row per user. | K28=6be8fb9a-... | L28=Never changes; ON DELETE RESTRICT. | M28=Medium
+A29=core.user_contacts | B29=3 | C29=email | D29=TEXT | E29=Yes | G29=UNIQUE | H29=Lower-case, trimmed email | I29=User's email address. | J29=OTP, login, account messages. | K29=rahul.k@example.com | L29=Normalised (lower-case, trimmed), valid format, unique (review). | M29=High
+A30=core.user_contacts | B30=4 | C30=phone_number | D30=TEXT | E30=Yes | G30=UNIQUE | H30=E.164: +<country><number> | I30=User's mobile number. | J30=SMS OTP and recovery. | K30=+919845012345 | L30=^\+[1-9][0-9]{7,14}$; unique (review). | M30=High
+A31=core.user_contacts | B31=5 | C31=contact_version | D31=INTEGER | E31=Yes | F31=1 | H31=1, 2, 3 ... | I31=Version of the contact details; +1 on every email / phone change. | J31=Every OTP stores the version it was sent for, so an OTP sent to an old address stops working and that check is reset (review). | K31=2 | L31=>= 1; raised only by trigger. | M31=Low
+A32=core.user_contacts | B32=6 | C32=created_at | D32=TIMESTAMPTZ | E32=Yes | F32=now() | H32=Date-time | I32=When saved. | J32=Timeline. | K32=2026-11-01 12:00+05:30 | M32=Low
+A33=core.user_contacts | B33=7 | C33=updated_at | D33=TIMESTAMPTZ | E33=Yes | F33=now() | H33=Date-time | I33=Last change. | J33=Change tracking. | K33=2026-11-01 12:00+05:30 | L33=Set by trigger. | M33=Low
+A34=core.user_verifications | B34=1 | C34=id | D34=BIGINT (identity) | E34=Yes | F34=auto number | G34=PK | H34=1, 2, 3 ... | I34=Internal row number. | J34=Primary key. | K34=2 | M34=Low | N34=Moved here from kyc_verifications (DB review)
+A35=core.user_verifications | B35=2 | C35=user_id | D35=UUID | E35=Yes | G35=FK -> users.user_id, UNIQUE | H35=An existing users.user_id | I35=Which user. | J35=One latest-summary row per user (review). | K35=fcba728f-... | L35=Never changes. | M35=Medium | N35=Moved here from kyc_verifications (DB review)
+A36=core.user_verifications | B36=3 | C36=email_status | D36=TEXT | E36=Yes | F36='not_started' | H36=not_started, pending, verified, failed | I36=Step 1: current email result. | J36=Email is proven first. | K36=verified | L36=pending when an OTP is sent; verified on the right code; failed when the OTP locks after 5 wrong codes. Attempt details live in user_otp_challenges (review). | M36=Low | N36=Moved here; 'failed' back (OTP locked) (DB review)
+A37=core.user_verifications | B37=4 | C37=email_verified_at | D37=TIMESTAMPTZ | E37=No | F37=NULL | H37=Date-time or empty | I37=When email was verified. | J37=Proof. | K37=2026-10-02 11:02+05:30 | L37=Filled exactly when verified; cleared when the email changes. | M37=Low | N37=Moved here from contact_verifications (DB review)
+A38=core.user_verifications | B38=5 | C38=phone_status | D38=TEXT | E38=Yes | F38='not_started' | H38=not_started, pending, verified, failed | I38=Step 2: current phone result. | J38=Phone is proven second. | K38=verified | L38=Can start only after email is verified. | M38=Low | N38=Moved here; 'failed' back (OTP locked) (DB review)
+A39=core.user_verifications | B39=6 | C39=phone_verified_at | D39=TIMESTAMPTZ | E39=No | F39=NULL | H39=Date-time or empty | I39=When phone was verified. | J39=Proof. | K39=2026-10-02 11:04+05:30 | L39=Filled exactly when verified; cleared when the phone changes. | M39=Low | N39=Moved here from contact_verifications (DB review)
+A40=core.user_verifications | B40=7 | C40=aadhaar_status | D40=TEXT | E40=Yes | F40='not_started' | H40=not_started, pending, verified, failed, review_required | I40=Step 3: Aadhaar KYC state. | J40=Proves identity and age. | K40=verified | L40=Starts only after email + phone verified and kyc_verification consent granted. | M40=Low | N40=Moved here from kyc_verifications (DB review)
+A41=core.user_verifications | B41=8 | C41=aadhaar_failure_reason | D41=TEXT | E41=No | F41=NULL | H41=16 values - see Value Lists | I41=Latest Aadhaar failure reason (review). | J41=Support knows what to fix; app picks the right retry message; analytics on drop-offs. | K41=name_mismatch | L41=Required exactly when failed / review_required; review only for name / DOB mismatch; too_many_attempts only at 3 tries. | M41=Low | N41=Back - 16 reasons (DB review overrides MoM #1)
+A42=core.user_verifications | B42=9 | C42=aadhaar_attempt_count | D42=SMALLINT | E42=Yes | F42=0 | H42=0 - 3 | I42=How many Aadhaar tries. | J42=Limits retries (proposed 3 - confirm with provider). | K42=1 | L42=0 only before start; 3rd failed try -> failed + too_many_attempts. | M42=Low | N42=Moved here; 3rd failed try sets too_many_attempts (DB review)
+A43=core.user_verifications | B43=10 | C43=aadhaar_verified_at | D43=TIMESTAMPTZ | E43=No | F43=NULL | H43=Date-time or empty | I43=When Aadhaar was verified. | J43=Proof. | K43=2026-10-02 11:07+05:30 | L43=Only when verified. | M43=Low | N43=Moved here from kyc_verifications (DB review)
+A44=core.user_verifications | B44=11 | C44=aadhaar_masked | D44=TEXT | E44=No | F44=NULL | H44=XXXXXXXX + last 4 digits | I44=Masked Aadhaar only (review). | J44=Show which document was used without storing it. | K44=XXXXXXXX4821 | L44=^X{8}[0-9]{4}$; required when verified. Full number never stored. | M44=Medium | N44=Moved here from kyc_verifications (DB review)
+A45=core.user_verifications | B45=12 | C45=aadhaar_provider | D45=TEXT | E45=No | F45=NULL | H45=digilocker, kyc_vendor | I45=Who verified Aadhaar (review: confirm options). | J45=Traceability; allows a fallback vendor. | K45=digilocker | L45=Required once Aadhaar has started. | M45=Low | N45=Modified: digilocker, kyc_vendor (DB review: confirm options)
+A46=core.user_verifications | B46=13 | C46=aadhaar_provider_ref | D46=TEXT | E46=No | F46=NULL | H46=Provider transaction ID | I46=Provider-side reference (review). | J46=Trace a check with the provider; never the Aadhaar number. | K46=DL-TXN-2001 | L46=Unique per provider. | M46=Medium | N46=Moved here from kyc_verifications (DB review)
+A47=core.user_verifications | B47=14 | C47=age_eligible | D47=BOOLEAN | E47=No | F47=NULL | H47=true, false (empty until Aadhaar verified) | I47=Is the user 18+ according to Aadhaar? | J47=Age comes only from the approved check (review). | K47=true | L47=Filled exactly when Aadhaar is verified. | M47=Low | N47=Moved here from kyc_verifications (DB review)
+A48=core.user_verifications | B48=15 | C48=pan_status | D48=TEXT | E48=Yes | F48='not_started' | H48=not_started, pending, verified, failed, review_required | I48=Step 4: PAN state. | J48=Second identity proof. | K48=verified | L48=Starts only after Aadhaar started; verified only after Aadhaar verified. | M48=Low | N48=Moved here from kyc_verifications (DB review)
+A49=core.user_verifications | B49=16 | C49=pan_failure_reason | D49=TEXT | E49=No | F49=NULL | H49=13 values - see Value Lists | I49=Latest PAN failure reason (review). | J49=Support, retry message, analytics. | K49=pan_not_linked_to_aadhaar | L49=Required exactly when failed / review_required; review only for mismatch reasons; too_many_attempts only at 3. | M49=Low | N49=Back - 13 reasons (DB review overrides MoM #1)
+A50=core.user_verifications | B50=17 | C50=pan_attempt_count | D50=SMALLINT | E50=Yes | F50=0 | H50=0 - 3 | I50=How many PAN tries. | J50=Limits retries. | K50=2 | L50=Same rules as Aadhaar. | M50=Low | N50=Moved here; 3rd failed try sets too_many_attempts (DB review)
+A51=core.user_verifications | B51=18 | C51=pan_verified_at | D51=TIMESTAMPTZ | E51=No | F51=NULL | H51=Date-time or empty | I51=When PAN was verified. | J51=Proof. | K51=2026-10-02 11:08+05:30 | L51=After aadhaar_verified_at. | M51=Low | N51=Moved here from kyc_verifications (DB review)
+A52=core.user_verifications | B52=19 | C52=pan_masked | D52=TEXT | E52=No | F52=NULL | H52=XXXPX + 4 digits + letter | I52=Masked PAN only (review). | J52=Show without storing the full PAN. | K52=XXXPX5678K | L52=^XXXPX[0-9]{4}[A-Z]$; individual PANs only. | M52=Medium | N52=Moved here from kyc_verifications (DB review)
+A53=core.user_verifications | B53=20 | C53=pan_provider | D53=TEXT | E53=No | F53=NULL | H53=digilocker, protean, kyc_vendor | I53=Who verified PAN (review: define allowed values). | J53=Traceability, same as Aadhaar. | K53=protean | L53=Required once PAN has started. | M53=Low | N53=Modified: digilocker, protean, kyc_vendor (DB review: define allowed values)
+A54=core.user_verifications | B54=21 | C54=pan_provider_ref | D54=TEXT | E54=No | F54=NULL | H54=Provider transaction ID | I54=Provider-side PAN reference (review). | J54=Trace the check. | K54=PAN-TXN-2002 | L54=Unique per provider. | M54=Medium | N54=Moved here from kyc_verifications (DB review)
+A55=core.user_verifications | B55=22 | C55=aadhaar_hash | D55=BYTEA | E55=No | F55=NULL | G55=UNIQUE | H55=32-byte keyed hash | I55=Keyed hash of the Aadhaar number (MoM 05 Nov #3). | J55=One Aadhaar = one account (detects already_used). | K55=\x7c1e... (32 bytes) | L55=HMAC-SHA256, own key; only if provider returns the full number AND legal approves. | M55=High | N55=Moved here from kyc_verifications (DB review)
+A56=core.user_verifications | B56=23 | C56=pan_hash | D56=BYTEA | E56=No | F56=NULL | G56=UNIQUE | H56=32-byte keyed hash | I56=Keyed hash of the normalised PAN (MoM 05 Nov #3). | J56=One PAN = one account. | K56=\x3b9d... (32 bytes) | L56=HMAC-SHA256 ('pan:' key); required when PAN verified. | M56=High | N56=Moved here from kyc_verifications (DB review)
+A57=core.user_verifications | B57=24 | C57=hash_key_version | D57=SMALLINT | E57=Yes | F57=1 | H57=1, 2, 3 ... | I57=Key version used for the hashes. | J57=Key rotation without losing duplicate checks. | K57=1 | L57=>= 1. | M57=Low | N57=Moved here from kyc_verifications (DB review)
+A58=core.user_verifications | B58=25 | C58=created_at | D58=TIMESTAMPTZ | E58=Yes | F58=now() | H58=Date-time | I58=When the row was created. | J58=Timeline. | K58=2026-10-02 11:00+05:30 | M58=Low | N58=Moved here from kyc_verifications (DB review)
+A59=core.user_verifications | B59=26 | C59=updated_at | D59=TIMESTAMPTZ | E59=Yes | F59=now() | H59=Date-time | I59=Last change. | J59=Change tracking. | K59=2026-11-03 09:01+05:30 | L59=Set by trigger. | M59=Low | N59=Moved here from kyc_verifications (DB review)
+A60=core.user_otp_challenges | B60=1 | C60=id | D60=BIGINT (identity) | E60=Yes | F60=auto number | G60=PK | H60=1, 2, 3 ... | I60=Internal row number. | J60=Primary key. | K60=41 | M60=Low
+A61=core.user_otp_challenges | B61=2 | C61=user_id | D61=UUID | E61=Yes | G61=FK -> users.user_id | H61=An existing users.user_id | I61=Which user the OTP was sent to. | J61=Links the OTP to the account. | K61=fcba728f-... | L61=ON DELETE RESTRICT. | M61=Medium
+A62=core.user_otp_challenges | B62=3 | C62=channel | D62=TEXT | E62=Yes | H62=email, phone | I62=Where the OTP was sent. | J62=Independent challenges per channel (review). | K62=email | L62=Fixed list. | M62=Low
+A63=core.user_otp_challenges | B63=4 | C63=purpose | D63=TEXT | E63=Yes | H63=signup, login, contact_change, account_recovery | I63=Why the OTP was sent (review). | J63=A code for one purpose cannot be used for another. | K63=signup | L63=Fixed list. | M63=Low
+A64=core.user_otp_challenges | B64=5 | C64=destination_hash | D64=BYTEA | E64=No | F64=NULL | H64=32-byte keyed hash or empty | I64=Keyed hash of the address the OTP was sent to (review: add / confirm). | J64=Proves which address got the code without storing it again; helps abuse checks. | K64=\x91aa... (32 bytes) | L64=Exactly 32 bytes when present; cannot change. | M64=Medium | N64=New column (DB review: add / confirm)
+A65=core.user_otp_challenges | B65=6 | C65=contact_version | D65=INTEGER | E65=Yes | H65=1, 2, 3 ... (copied from user_contacts) | I65=Contact version at send time (review). | J65=Old OTPs stop working after the email / phone changes. | K65=1 | L65=Must equal user_contacts.contact_version when sent and verified. | M65=Low
+A66=core.user_otp_challenges | B66=7 | C66=otp_hmac | D66=BYTEA | E66=Yes | H66=32-byte keyed hash | I66=Keyed HMAC of the code (review). | J66=Plain OTP is never stored. | K66=\x5f2a... (32 bytes) | L66=HMAC-SHA256 with the OTP key (Vault); exactly 32 bytes. | M66=High
+A67=core.user_otp_challenges | B67=8 | C67=status | D67=TEXT | E67=Yes | F67='pending' | H67=pending, verified, expired, locked, cancelled | I67=Result of this OTP (review). | J67=Full OTP lifecycle without overwriting earlier tries. | K67=verified | L67=One pending OTP per user + channel + purpose. | M67=Low
+A68=core.user_otp_challenges | B68=9 | C68=attempt_count | D68=SMALLINT | E68=Yes | F68=0 | H68=0 - 5 | I68=Wrong codes entered (review: max 5). | J68=Stops guessing. | K68=1 | L68=At 5 the OTP is locked and that channel becomes failed. | M68=Low
+A69=core.user_otp_challenges | B69=10 | C69=sent_at | D69=TIMESTAMPTZ | E69=Yes | F69=now() | H69=Date-time | I69=When first sent. | J69=Timeline. | K69=2026-11-06 10:00+05:30 | M69=Low
+A70=core.user_otp_challenges | B70=11 | C70=expires_at | D70=TIMESTAMPTZ | E70=Yes | F70=last_sent_at + 10 min | H70=Date-time | I70=When the code stops working (review: 10 minutes). | J70=Short life limits misuse. | K70=2026-11-06 10:11+05:30 | L70=Set by trigger; cannot be edited. | M70=Low
+A71=core.user_otp_challenges | B71=12 | C71=verified_at | D71=TIMESTAMPTZ | E71=No | F71=NULL | H71=Date-time or empty | I71=When the right code was entered. | J71=Proof of verification. | K71=2026-11-06 10:03+05:30 | L71=Exactly when verified; before expires_at. | M71=Low
+A72=core.user_otp_challenges | B72=13 | C72=last_sent_at | D72=TIMESTAMPTZ | E72=Yes | F72=now() | H72=Date-time | I72=When last (re)sent (review: 60-second resend cooldown). | J72=Stops OTP spamming. | K72=2026-11-06 10:01+05:30 | L72=>= sent_at; resend blocked within 60 s. | M72=Low
+A73=core.user_otp_challenges | B73=14 | C73=created_at | D73=TIMESTAMPTZ | E73=Yes | F73=now() | H73=Date-time | I73=When the row was created. | J73=Timeline. | K73=2026-11-06 10:00+05:30 | M73=Low
+A74=core.user_otp_challenges | B74=15 | C74=updated_at | D74=TIMESTAMPTZ | E74=Yes | F74=now() | H74=Date-time | I74=Last change. | J74=Change tracking. | K74=2026-11-06 10:03+05:30 | L74=Set by trigger. | M74=Low
+A75=core.user_consents | B75=1 | C75=id | D75=BIGINT (identity) | E75=Yes | F75=auto number | G75=PK | H75=1, 2, 3 ... | I75=Internal row number. | J75=Primary key; breaks ties. | K75=101 | M75=Low
+A76=core.user_consents | B76=2 | C76=user_id | D76=UUID | E76=Yes | G76=FK -> users.user_id | H76=An existing users.user_id | I76=Whose decision. | J76=Links consent to the account. | K76=fcba728f-... | L76=ON DELETE RESTRICT. | M76=Medium
+A77=core.user_consents | B77=3 | C77=consent_type | D77=TEXT | E77=Yes | H77=terms_of_service, privacy_notice, kyc_verification, marketing | I77=What the user agrees to. | J77=Consent must be specific (DPDP). | K77=marketing | L77=Fixed list. | M77=Low
+A78=core.user_consents | B78=4 | C78=policy_version | D78=TEXT | E78=Yes | H78=v<major>.<minor> | I78=Version of the document shown. | J78=Proves who accepted which terms. | K78=v2.0 | L78=^v[0-9]{1,3}\.[0-9]{1,3}$. | M78=Low
+A79=core.user_consents | B79=5 | C79=decision | D79=TEXT | E79=Yes | H79=granted, declined, withdrawn | I79=What the user chose. | J79=Each decision kept as history (review). | K79=withdrawn | L79=withdrawn only after granted. | M79=Low
+A80=core.user_consents | B80=6 | C80=source | D80=TEXT | E80=Yes | H80=signup_flow, settings, admin_console, api | I80=Where the decision was made. | J80=Proof of how consent was taken. | K80=settings | L80=Fixed list. | M80=Low
+A81=core.user_consents | B81=7 | C81=captured_at | D81=TIMESTAMPTZ | E81=Yes | F81=now() | G81=UNIQUE with user_id, type, version | H81=Date-time | I81=When the decision was made. | J81=Latest decision wins. | K81=2026-11-03 10:00+05:30 | L81=Later than the previous decision of that type; not in future. | M81=Low
+A82=core.user_status_history | B82=1 | C82=id | D82=BIGINT (identity) | E82=Yes | F82=auto number | G82=PK | H82=1, 2, 3 ... | I82=Internal row number. | J82=Order on equal times. | K82=58 | M82=Low
+A83=core.user_status_history | B83=2 | C83=user_id | D83=UUID | E83=Yes | G83=FK -> users.user_id | H83=An existing users.user_id | I83=Whose status changed. | J83=Links history to the account. | K83=6be8fb9a-... | L83=ON DELETE RESTRICT. | M83=Medium
+A84=core.user_status_history | B84=3 | C84=from_status | D84=TEXT | E84=No | F84=NULL | H84=Same 6 values as users.account_status (empty only for signup) | I84=Status before. | J84=Allowed-move check. | K84=active | L84=Equals the previous row's to_status. | M84=Low
+A85=core.user_status_history | B85=4 | C85=to_status | D85=TEXT | E85=Yes | H85=limited, active, suspended, deactivated, deletion_pending, deleted | I85=Status after. | J85=Last row = users.account_status. | K85=suspended | L85=Only moves in the transition matrix. | M85=Low
+A86=core.user_status_history | B86=5 | C86=actor_type | D86=TEXT | E86=Yes | H86=user, admin, support, system | I86=Who made the change (review). | J86=Accountability. | K86=admin | L86=Rules decide which actor may use which reason. | M86=Low
+A87=core.user_status_history | B87=6 | C87=actor_id | D87=TEXT | E87=No | F87=NULL | H87=admin:<id>, support:<id>, the user's user_id; empty for system | I87=Which person exactly (review: TEXT). | J87=Trace privileged actions. | K87=admin:3 | L87=Required for user / admin / support; empty for system; ID characters only, max 100. | M87=Medium | N87=Modified: TEXT confirmed by DB review
+A88=core.user_status_history | B88=7 | C88=reason_code | D88=TEXT | E88=Yes | H88=15 values - see Value Lists | I88=Why the status changed (review: document allowed codes). | J88=Reports; no free text. | K88=report_upheld | L88=Must fit the transition matrix and the actor. | M88=Low
+A89=core.user_status_history | B89=8 | C89=effective_until | D89=TIMESTAMPTZ | E89=No | F89=NULL | H89=Date-time or empty | I89=When a temporary status ends (review). | J89=Daily job ends grace periods and temporary suspensions. | K89=now() + 30 days | L89=Required for deletion_pending; only for deletion_pending / suspended; in the future. | M89=Low
+A90=core.user_status_history | B90=9 | C90=request_id | D90=TEXT | E90=No | F90=NULL | H90=ID text, max 100 | I90=Request / correlation ID (review). | J90=Links to audit events and server logs. | K90=req-admin-91 | L90=Never free text. | M90=Low
+A91=core.user_status_history | B91=10 | C91=created_at | D91=TIMESTAMPTZ | E91=Yes | F91=now() | H91=Date-time | I91=When it happened. | J91=Timeline for support and legal. | K91=2026-11-03 23:08+05:30 | M91=Low
+
+SHEET: Value Lists [state=]
+A1=Value lists - table > column > allowed values
+A2=Each table (dark band) lists all its columns (light row). Under each column: its allowed values with meaning, or its format if it is not a fixed list. Use the + / - buttons on the left to fold a table or column.
+A4=# | B4=Column | C4=Value / format | D4=Meaning | E4=When / notes | F4=Change (DB review)
+A5=core.users   |   12 columns (4 with fixed value lists)   |   The account: lifecycle status, overall verification summary, age result, date of birth and gender. No contact details, no documents.
+A6=1 | B6=id | C6=BIGINT (identity)  |  required | D6=Internal row number (only inside users). | E6=Free format (no fixed list)
+B7=↳ | C7=1, 2, 3 ... (never reused) | D7=Example: 2 | E7=Generated always; gaps are normal.
+A8=2 | B8=user_id | C8=UUID  |  required | D8=Unique, stable user reference. Every other table points here (column user_id). | E8=Free format (no fixed list) | F8=Done
+B9=↳ | C9=Random UUID made by the database | D9=Example: 1c6e5515-f6ba-47cd-9ee0-eb937103d129 | E9=users_user_id_uq; cannot change (users_before_write).
+A10=3 | B10=account_status | C10=TEXT  |  required | D10=Where the account is in its life cycle. | E10=6 allowed values
+B11=↳ | C11=limited | D11=Signed up; onboarding / KYC only (default). | E11=Access Rules gate 2
+B12=↳ | C12=active | D12=All gates passed; main-app access. | E12=Gate 3 - activation guard
+B13=↳ | C13=suspended | D13=Blocked by moderation or system. | E13=Gate 5
+B14=↳ | C14=deactivated | D14=User paused / inactive. | E14=Gate 5
+B15=↳ | C15=deletion_pending | D15=Deletion requested; 30-day grace. | E15=Gate 5
+B16=↳ | C16=deleted | D16=Erased; tombstone only. Final. | E16=Gate 5
+A17=4 | B17=verification_status | C17=TEXT  |  required | D17=Overall summary of the four checks. | E17=4 allowed values
+B18=↳ | C18=pending | D18=Not all checks finished (default).
+B19=↳ | C19=verified | D19=Email, phone, Aadhaar and PAN verified.
+B20=↳ | C20=rejected | D20=A KYC check failed.
+B21=↳ | C21=review_required | D21=Admin must check a near-match.
+A22=5 | B22=timezone | C22=TEXT  |  required | D22=User's time zone. | E22=Free format (no fixed list)
+B23=↳ | C23=IANA time zone name | D23=Example: Asia/Kolkata | E23=Must exist in pg_timezone_names.
+A24=6 | B24=age_eligibility_status | C24=TEXT  |  required | D24=Result of the 18+ check. | E24=4 allowed values
+B25=↳ | C25=unknown | D25=Not checked yet (default).
+B26=↳ | C26=eligible | D26=18 or older (from Aadhaar).
+B27=↳ | C27=ineligible | D27=Under 18. | E27=Account suspended with age_ineligible
+B28=↳ | C28=review_required | D28=Needs a manual check.
+A29=7 | B29=age_verified_at | C29=TIMESTAMPTZ  |  optional | D29=When age was confirmed from Aadhaar. | E29=Free format (no fixed list)
+B30=↳ | C30=Date-time or empty | D30=Example: 2026-10-02 11:07+05:30 | E30=Set by trigger; not in the future.
+A31=8 | B31=date_of_birth | C31=DATE  |  optional | D31=Date of birth (entered, confirmed by Aadhaar). | E31=Free format (no fixed list)
+B32=↳ | C32=1900-01-01 to today | D32=Example: 2000-11-02 | E32=Not in future; locked after age verification; cleared on deletion. LEGAL / PRIVACY APPROVAL REQUIRED before storing (review).
+A33=9 | B33=created_at | C33=TIMESTAMPTZ  |  required | D33=When the account was created. | E33=Free format (no fixed list)
+B34=↳ | C34=Date-time | D34=Example: 2026-10-02 11:00+05:30
+A35=10 | B35=updated_at | C35=TIMESTAMPTZ  |  required | D35=When the row last changed. | E35=Free format (no fixed list)
+B36=↳ | C36=Date-time | D36=Example: 2026-11-03 10:05+05:30 | E36=Set by trigger.
+A37=11 | B37=deleted_at | C37=TIMESTAMPTZ  |  optional | D37=Soft-deletion time. | E37=Free format (no fixed list)
+B38=↳ | C38=Date-time or empty | D38=Example: 2026-07-01 09:30+05:30 | E38=Filled exactly when account_status = deleted.
+A39=12 | B39=gender | C39=TEXT  |  required | D39=User's gender (MoM 05 Nov - not in the review sheet). | E39=10 allowed values
+B40=↳ | C40=male | D40=Male.
+B41=↳ | C41=female | D41=Female.
+B42=↳ | C42=transgender_man | D42=Transgender man.
+B43=↳ | C43=transgender_woman | D43=Transgender woman.
+B44=↳ | C44=non_binary | D44=Non-binary.
+B45=↳ | C45=genderqueer | D45=Genderqueer.
+B46=↳ | C46=genderfluid | D46=Genderfluid.
+B47=↳ | C47=agender | D47=Agender.
+B48=↳ | C48=other | D48=Another gender not listed.
+B49=↳ | C49=prefer_not_to_say | D49=Chose not to say (default).
+A51=core.auth_identities   |   10 columns (3 with fixed value lists)   |   How a user signs in: Google, Apple, email OTP or phone OTP. Active, unlinked or revoked (kept for audit). | F51=Modified: providers email_otp / phone_otp added; status active / unlinked / revoked; unlinked_at + unlink_reason back (DB review)
+A52=1 | B52=id | C52=BIGINT (identity)  |  required | D52=Internal row number. | E52=Free format (no fixed list)
+B53=↳ | C53=1, 2, 3 ... | D53=Example: 16
+A54=2 | B54=user_id | C54=UUID  |  required | D54=Which user this sign-in method belongs to. | E54=Free format (no fixed list)
+B55=↳ | C55=An existing users.user_id | D55=Example: 9c3246df-... | E55=ON DELETE RESTRICT.
+A56=3 | B56=provider | C56=TEXT  |  required | D56=Sign-in method. | E56=4 allowed values | F56=Modified: email_otp, phone_otp added (DB review - OTP-only login)
+B57=↳ | C57=email_otp | D57=Sign in with a code sent by email. | E57=Needs verified email | F57=New / back (DB review)
+B58=↳ | C58=phone_otp | D58=Sign in with a code sent by SMS. | E58=Needs verified phone | F58=New / back (DB review)
+B59=↳ | C59=google | D59=Sign in with Google.
+B60=↳ | C60=apple | D60=Sign in with Apple.
+A61=5 | B61=status | C61=TEXT  |  required | D61=State of the method. | E61=3 allowed values | F61=Modified: active, unlinked, revoked (DB review overrides MoM #2)
+B62=↳ | C62=active | D62=Can be used (default).
+B63=↳ | C63=unlinked | D63=Removed by the user / admin. | E63=unlinked_at + reason | F63=New / back (DB review)
+B64=↳ | C64=revoked | D64=Cancelled for security or by the provider. | E64=unlinked_at + reason | F64=New / back (DB review)
+A65=6 | B65=linked_at | C65=TIMESTAMPTZ  |  required | D65=When the method was linked. | E65=Free format (no fixed list)
+B66=↳ | C66=Date-time | D66=Example: 2026-10-02 11:00+05:30
+A67=7 | B67=last_login_at | C67=TIMESTAMPTZ  |  optional | D67=Last successful login with this method. | E67=Free format (no fixed list) | F67=Modified: also set by OTP login
+B68=↳ | C68=Date-time or empty | D68=Example: 2026-11-03 09:01+05:30 | E68=>= linked_at; set by verify_contact_otp for OTP logins.
+A69=8 | B69=unlinked_at | C69=TIMESTAMPTZ  |  optional | D69=When it was unlinked / revoked. | E69=Free format (no fixed list) | F69=Back (DB review overrides MoM #2)
+B70=↳ | C70=Date-time or empty | D70=Example: 2026-10-20 14:00+05:30 | E70=>= linked_at; required when not active.
+A71=9 | B71=unlink_reason | C71=TEXT  |  optional | D71=Why it was unlinked / revoked. | E71=4 allowed values | F71=Back (DB review overrides MoM #2)
+B72=↳ | C72=user_request | D72=User removed it. | F72=New / back (DB review)
+B73=↳ | C73=security | D73=Removed for a security reason. | F73=New / back (DB review)
+B74=↳ | C74=admin_action | D74=Removed by an admin. | F74=New / back (DB review)
+B75=↳ | C75=provider_revoked | D75=Google / Apple revoked access. | F75=New / back (DB review)
+A76=10 | B76=updated_at | C76=TIMESTAMPTZ  |  required | D76=Last change. | E76=Free format (no fixed list)
+B77=↳ | C77=Date-time | D77=Example: 2026-11-03 09:01+05:30 | E77=Set by trigger.
+A79=core.user_contacts   |   7 columns (0 with fixed value lists)   |   The user's email address and phone number, plus contact_version (goes up on every change).
+A80=1 | B80=id | C80=BIGINT (identity)  |  required | D80=Internal row number. | E80=Free format (no fixed list)
+B81=↳ | C81=1, 2, 3 ... | D81=Example: 3
+A82=2 | B82=user_id | C82=UUID  |  required | D82=Which user. | E82=Free format (no fixed list)
+B83=↳ | C83=An existing users.user_id | D83=Example: 6be8fb9a-... | E83=Never changes; ON DELETE RESTRICT.
+A84=3 | B84=email | C84=TEXT  |  required | D84=User's email address. | E84=Free format (no fixed list)
+B85=↳ | C85=Lower-case, trimmed email | D85=Example: rahul.k@example.com | E85=Normalised (lower-case, trimmed), valid format, unique (review).
+A86=4 | B86=phone_number | C86=TEXT  |  required | D86=User's mobile number. | E86=Free format (no fixed list)
+B87=↳ | C87=E.164: +<country><number> | D87=Example: +919845012345 | E87=^\+[1-9][0-9]{7,14}$; unique (review).
+A88=5 | B88=contact_version | C88=INTEGER  |  required | D88=Version of the contact details; +1 on every email / phone change. | E88=Free format (no fixed list)
+B89=↳ | C89=1, 2, 3 ... | D89=Example: 2 | E89=>= 1; raised only by trigger.
+A90=6 | B90=created_at | C90=TIMESTAMPTZ  |  required | D90=When saved. | E90=Free format (no fixed list)
+B91=↳ | C91=Date-time | D91=Example: 2026-11-01 12:00+05:30
+A92=7 | B92=updated_at | C92=TIMESTAMPTZ  |  required | D92=Last change. | E92=Free format (no fixed list)
+B93=↳ | C93=Date-time | D93=Example: 2026-11-01 12:00+05:30 | E93=Set by trigger.
+A95=core.user_verifications   |   26 columns (8 with fixed value lists)   |   Latest result of every check: email, phone, Aadhaar, PAN and age, with failure reasons, masked numbers and providers. | F95=New single table: replaces contact_verifications + kyc_verifications; failure reasons + failed statuses back (DB review)
+A96=1 | B96=id | C96=BIGINT (identity)  |  required | D96=Internal row number. | E96=Free format (no fixed list) | F96=Moved here from kyc_verifications (DB review)
+B97=↳ | C97=1, 2, 3 ... | D97=Example: 2
+A98=2 | B98=user_id | C98=UUID  |  required | D98=Which user. | E98=Free format (no fixed list) | F98=Moved here from kyc_verifications (DB review)
+B99=↳ | C99=An existing users.user_id | D99=Example: fcba728f-... | E99=Never changes.
+A100=3 | B100=email_status | C100=TEXT  |  required | D100=Step 1: current email result. | E100=4 allowed values | F100=Moved here; 'failed' back (OTP locked) (DB review)
+B101=↳ | C101=not_started | D101=No OTP sent yet (default).
+B102=↳ | C102=pending | D102=OTP sent, waiting.
+B103=↳ | C103=verified | D103=Right code entered.
+B104=↳ | C104=failed | D104=Last OTP locked after 5 wrong codes. | E104=A new OTP sets it back to pending | F104=New / back (DB review)
+A105=4 | B105=email_verified_at | C105=TIMESTAMPTZ  |  optional | D105=When email was verified. | E105=Free format (no fixed list) | F105=Moved here from contact_verifications (DB review)
+B106=↳ | C106=Date-time or empty | D106=Example: 2026-10-02 11:02+05:30 | E106=Filled exactly when verified; cleared when the email changes.
+A107=5 | B107=phone_status | C107=TEXT  |  required | D107=Step 2: current phone result. | E107=4 allowed values | F107=Moved here; 'failed' back (OTP locked) (DB review)
+B108=↳ | C108=not_started | D108=No OTP sent yet (default).
+B109=↳ | C109=pending | D109=OTP sent, waiting.
+B110=↳ | C110=verified | D110=Right code entered.
+B111=↳ | C111=failed | D111=Last OTP locked after 5 wrong codes. | E111=A new OTP sets it back to pending | F111=New / back (DB review)
+A112=6 | B112=phone_verified_at | C112=TIMESTAMPTZ  |  optional | D112=When phone was verified. | E112=Free format (no fixed list) | F112=Moved here from contact_verifications (DB review)
+B113=↳ | C113=Date-time or empty | D113=Example: 2026-10-02 11:04+05:30 | E113=Filled exactly when verified; cleared when the phone changes.
+A114=7 | B114=aadhaar_status | C114=TEXT  |  required | D114=Step 3: Aadhaar KYC state. | E114=5 allowed values | F114=Moved here from kyc_verifications (DB review)
+B115=↳ | C115=not_started | D115=Not started (default).
+B116=↳ | C116=pending | D116=Check in progress.
+B117=↳ | C117=verified | D117=Passed.
+B118=↳ | C118=failed | D118=Failed - see failure reason.
+B119=↳ | C119=review_required | D119=Near-match; admin decides. | E119=Only mismatch reasons
+A120=8 | B120=aadhaar_failure_reason | C120=TEXT  |  optional | D120=Latest Aadhaar failure reason (review). | E120=16 allowed values | F120=Back - 16 reasons (DB review overrides MoM #1)
+B121=↳ | C121=wrong_otp | D121=Wrong Aadhaar OTP (UIDAI 400). | F121=New / back (DB review)
+B122=↳ | C122=otp_attempts_exceeded | D122=Too many wrong OTPs (UIDAI 403). | F122=New / back (DB review)
+B123=↳ | C123=otp_limit_exceeded | D123=Too many OTP requests - blocked 30 min. | F123=New / back (DB review)
+B124=↳ | C124=otp_expired | D124=Aadhaar OTP / DigiLocker link expired. | F124=New / back (DB review)
+B125=↳ | C125=mobile_not_linked | D125=No mobile linked to the Aadhaar. | F125=New / back (DB review)
+B126=↳ | C126=invalid_aadhaar_number | D126=Wrong format / checksum. | F126=New / back (DB review)
+B127=↳ | C127=aadhaar_not_found | D127=Number does not exist. | F127=New / back (DB review)
+B128=↳ | C128=aadhaar_inactive | D128=Cancelled / deactivated by UIDAI. | F128=New / back (DB review)
+B129=↳ | C129=aadhaar_locked | D129=User has locked their Aadhaar. | F129=New / back (DB review)
+B130=↳ | C130=name_mismatch | D130=Name differs. | E130=failed or review_required | F130=New / back (DB review)
+B131=↳ | C131=dob_mismatch | D131=DOB differs. | E131=failed or review_required | F131=New / back (DB review)
+B132=↳ | C132=already_used | D132=Aadhaar already on another account. | E132=aadhaar_hash | F132=New / back (DB review)
+B133=↳ | C133=user_cancelled | D133=User left the flow. | F133=New / back (DB review)
+B134=↳ | C134=consent_denied | D134=User refused the consent screen. | F134=New / back (DB review)
+B135=↳ | C135=provider_error | D135=Provider down / timeout. | F135=New / back (DB review)
+B136=↳ | C136=too_many_attempts | D136=3 tries used. | E136=attempt_count = 3 | F136=New / back (DB review)
+A137=9 | B137=aadhaar_attempt_count | C137=SMALLINT  |  required | D137=How many Aadhaar tries. | E137=Free format (no fixed list) | F137=Moved here; 3rd failed try sets too_many_attempts (DB review)
+B138=↳ | C138=0 - 3 | D138=Example: 1 | E138=0 only before start; 3rd failed try -> failed + too_many_attempts.
+A139=10 | B139=aadhaar_verified_at | C139=TIMESTAMPTZ  |  optional | D139=When Aadhaar was verified. | E139=Free format (no fixed list) | F139=Moved here from kyc_verifications (DB review)
+B140=↳ | C140=Date-time or empty | D140=Example: 2026-10-02 11:07+05:30 | E140=Only when verified.
+A141=11 | B141=aadhaar_masked | C141=TEXT  |  optional | D141=Masked Aadhaar only (review). | E141=Free format (no fixed list) | F141=Moved here from kyc_verifications (DB review)
+B142=↳ | C142=XXXXXXXX + last 4 digits | D142=Example: XXXXXXXX4821 | E142=^X{8}[0-9]{4}$; required when verified. Full number never stored.
+A143=12 | B143=aadhaar_provider | C143=TEXT  |  optional | D143=Who verified Aadhaar (review: confirm options). | E143=2 allowed values | F143=Modified: digilocker, kyc_vendor (DB review: confirm options)
+B144=↳ | C144=digilocker | D144=DigiLocker.
+A145=13 | B145=aadhaar_provider_ref | C145=TEXT  |  optional | D145=Provider-side reference (review). | E145=Free format (no fixed list) | F145=Moved here from kyc_verifications (DB review)
+B146=↳ | C146=Provider transaction ID | D146=Example: DL-TXN-2001 | E146=Unique per provider.
+A147=14 | B147=age_eligible | C147=BOOLEAN  |  optional | D147=Is the user 18+ according to Aadhaar? | E147=Free format (no fixed list) | F147=Moved here from kyc_verifications (DB review)
+B148=↳ | C148=true, false (empty until Aadhaar verified) | D148=Example: true | E148=Filled exactly when Aadhaar is verified.
+A149=15 | B149=pan_status | C149=TEXT  |  required | D149=Step 4: PAN state. | E149=5 allowed values | F149=Moved here from kyc_verifications (DB review)
+B150=↳ | C150=not_started | D150=Not started (default).
+B151=↳ | C151=pending | D151=Check in progress.
+B152=↳ | C152=verified | D152=Passed.
+B153=↳ | C153=failed | D153=Failed - see failure reason.
+B154=↳ | C154=review_required | D154=Near-match; admin decides. | E154=Only mismatch reasons
+A155=16 | B155=pan_failure_reason | C155=TEXT  |  optional | D155=Latest PAN failure reason (review). | E155=13 allowed values | F155=Back - 13 reasons (DB review overrides MoM #1)
+B156=↳ | C156=invalid_pan_format | D156=Not in format ABCPX1234K. | F156=New / back (DB review)
+B157=↳ | C157=pan_not_found | D157=PAN does not exist. | F157=New / back (DB review)
+B158=↳ | C158=pan_inactive | D158=Deactivated / deleted. | F158=New / back (DB review)
+B159=↳ | C159=pan_not_individual | D159=Company / firm PAN. | F159=New / back (DB review)
+B160=↳ | C160=pan_not_linked_to_aadhaar | D160=PAN not linked to Aadhaar (inoperative). | F160=New / back (DB review)
+B161=↳ | C161=name_mismatch | D161=Name differs. | E161=failed or review_required | F161=New / back (DB review)
+B162=↳ | C162=dob_mismatch | D162=DOB differs. | E162=failed or review_required | F162=New / back (DB review)
+B163=↳ | C163=aadhaar_pan_name_mismatch | D163=PAN name differs from verified Aadhaar name. | E163=failed or review_required | F163=New / back (DB review)
+B164=↳ | C164=already_used | D164=PAN already on another account. | E164=pan_hash | F164=New / back (DB review)
+B165=↳ | C165=user_cancelled | D165=User left the flow. | F165=New / back (DB review)
+B166=↳ | C166=consent_denied | D166=User refused consent. | F166=New / back (DB review)
+B167=↳ | C167=provider_error | D167=Provider down. | F167=New / back (DB review)
+B168=↳ | C168=too_many_attempts | D168=3 tries used. | E168=attempt_count = 3 | F168=New / back (DB review)
+A169=17 | B169=pan_attempt_count | C169=SMALLINT  |  required | D169=How many PAN tries. | E169=Free format (no fixed list) | F169=Moved here; 3rd failed try sets too_many_attempts (DB review)
+B170=↳ | C170=0 - 3 | D170=Example: 2 | E170=Same rules as Aadhaar.
+A171=18 | B171=pan_verified_at | C171=TIMESTAMPTZ  |  optional | D171=When PAN was verified. | E171=Free format (no fixed list) | F171=Moved here from kyc_verifications (DB review)
+B172=↳ | C172=Date-time or empty | D172=Example: 2026-10-02 11:08+05:30 | E172=After aadhaar_verified_at.
+A173=19 | B173=pan_masked | C173=TEXT  |  optional | D173=Masked PAN only (review). | E173=Free format (no fixed list) | F173=Moved here from kyc_verifications (DB review)
+B174=↳ | C174=XXXPX + 4 digits + letter | D174=Example: XXXPX5678K | E174=^XXXPX[0-9]{4}[A-Z]$; individual PANs only.
+A175=20 | B175=pan_provider | C175=TEXT  |  optional | D175=Who verified PAN (review: define allowed values). | E175=3 allowed values | F175=Modified: digilocker, protean, kyc_vendor (DB review: define allowed values)
+B176=↳ | C176=digilocker | D176=PAN document from DigiLocker. | F176=New / back (DB review)
+A177=21 | B177=pan_provider_ref | C177=TEXT  |  optional | D177=Provider-side PAN reference (review). | E177=Free format (no fixed list) | F177=Moved here from kyc_verifications (DB review)
+B178=↳ | C178=Provider transaction ID | D178=Example: PAN-TXN-2002 | E178=Unique per provider.
+A179=22 | B179=aadhaar_hash | C179=BYTEA  |  optional | D179=Keyed hash of the Aadhaar number (MoM 05 Nov #3). | E179=Free format (no fixed list) | F179=Moved here from kyc_verifications (DB review)
+B180=↳ | C180=32-byte keyed hash | D180=Example: \x7c1e... (32 bytes) | E180=HMAC-SHA256, own key; only if provider returns the full number AND legal approves.
+A181=23 | B181=pan_hash | C181=BYTEA  |  optional | D181=Keyed hash of the normalised PAN (MoM 05 Nov #3). | E181=Free format (no fixed list) | F181=Moved here from kyc_verifications (DB review)
+B182=↳ | C182=32-byte keyed hash | D182=Example: \x3b9d... (32 bytes) | E182=HMAC-SHA256 ('pan:' key); required when PAN verified.
+A183=24 | B183=hash_key_version | C183=SMALLINT  |  required | D183=Key version used for the hashes. | E183=Free format (no fixed list) | F183=Moved here from kyc_verifications (DB review)
+B184=↳ | C184=1, 2, 3 ... | D184=Example: 1 | E184=>= 1.
+A185=25 | B185=created_at | C185=TIMESTAMPTZ  |  required | D185=When the row was created. | E185=Free format (no fixed list) | F185=Moved here from kyc_verifications (DB review)
+B186=↳ | C186=Date-time | D186=Example: 2026-10-02 11:00+05:30
+A187=26 | B187=updated_at | C187=TIMESTAMPTZ  |  required | D187=Last change. | E187=Free format (no fixed list) | F187=Moved here from kyc_verifications (DB review)
+B188=↳ | C188=Date-time | D188=Example: 2026-11-03 09:01+05:30 | E188=Set by trigger.
+A190=core.user_otp_challenges   |   15 columns (3 with fixed value lists)   |   Every OTP sent for email or phone: purpose, destination hash, code hash, tries, expiry, resend time, result. | F190=Modified: destination_hash added (DB review)
+A191=1 | B191=id | C191=BIGINT (identity)  |  required | D191=Internal row number. | E191=Free format (no fixed list)
+B192=↳ | C192=1, 2, 3 ... | D192=Example: 41
+A193=2 | B193=user_id | C193=UUID  |  required | D193=Which user the OTP was sent to. | E193=Free format (no fixed list)
+B194=↳ | C194=An existing users.user_id | D194=Example: fcba728f-... | E194=ON DELETE RESTRICT.
+A195=3 | B195=channel | C195=TEXT  |  required | D195=Where the OTP was sent. | E195=2 allowed values
+B196=↳ | C196=email | D196=OTP by email.
+B197=↳ | C197=phone | D197=OTP by SMS. | E197=Signup: only after email verified
+A198=4 | B198=purpose | C198=TEXT  |  required | D198=Why the OTP was sent (review). | E198=4 allowed values
+B199=↳ | C199=signup | D199=Verify email / phone at signup.
+B200=↳ | C200=login | D200=Sign in with email_otp / phone_otp.
+B201=↳ | C201=contact_change | D201=Verify a new email / phone.
+B202=↳ | C202=account_recovery | D202=Prove ownership to recover the account.
+A203=5 | B203=destination_hash | C203=BYTEA  |  optional | D203=Keyed hash of the address the OTP was sent to (review: add / confirm). | E203=Free format (no fixed list) | F203=New column (DB review: add / confirm)
+B204=↳ | C204=32-byte keyed hash or empty | D204=Example: \x91aa... (32 bytes) | E204=Exactly 32 bytes when present; cannot change.
+A205=6 | B205=contact_version | C205=INTEGER  |  required | D205=Contact version at send time (review). | E205=Free format (no fixed list)
+B206=↳ | C206=1, 2, 3 ... (copied from user_contacts) | D206=Example: 1 | E206=Must equal user_contacts.contact_version when sent and verified.
+B207=↳ | C207=32-byte keyed hash | D207=Example: \x5f2a... (32 bytes) | E207=HMAC-SHA256 with the OTP key (Vault); exactly 32 bytes.
+A208=8 | B208=status | C208=TEXT  |  required | D208=Result of this OTP (review). | E208=5 allowed values
+B209=↳ | C209=pending | D209=Sent; waiting (default). | E209=One per user + channel + purpose
+B210=↳ | C210=verified | D210=Right code entered.
+B211=↳ | C211=expired | D211=Not used within 10 min. | E211=Cleanup job
+B212=↳ | C212=locked | D212=5 wrong codes. | E212=Channel -> failed
+B213=↳ | C213=cancelled | D213=Replaced, or contact changed.
+A214=9 | B214=attempt_count | C214=SMALLINT  |  required | D214=Wrong codes entered (review: max 5). | E214=Free format (no fixed list)
+B215=↳ | C215=0 - 5 | D215=Example: 1 | E215=At 5 the OTP is locked and that channel becomes failed.
+A216=10 | B216=sent_at | C216=TIMESTAMPTZ  |  required | D216=When first sent. | E216=Free format (no fixed list)
+B217=↳ | C217=Date-time | D217=Example: 2026-11-06 10:00+05:30
+A218=11 | B218=expires_at | C218=TIMESTAMPTZ  |  required | D218=When the code stops working (review: 10 minutes). | E218=Free format (no fixed list)
+B219=↳ | C219=Date-time | D219=Example: 2026-11-06 10:11+05:30 | E219=Set by trigger; cannot be edited.
+A220=12 | B220=verified_at | C220=TIMESTAMPTZ  |  optional | D220=When the right code was entered. | E220=Free format (no fixed list)
+B221=↳ | C221=Date-time or empty | D221=Example: 2026-11-06 10:03+05:30 | E221=Exactly when verified; before expires_at.
+A222=13 | B222=last_sent_at | C222=TIMESTAMPTZ  |  required | D222=When last (re)sent (review: 60-second resend cooldown). | E222=Free format (no fixed list)
+B223=↳ | C223=Date-time | D223=Example: 2026-11-06 10:01+05:30 | E223=>= sent_at; resend blocked within 60 s.
+A224=14 | B224=created_at | C224=TIMESTAMPTZ  |  required | D224=When the row was created. | E224=Free format (no fixed list)
+B225=↳ | C225=Date-time | D225=Example: 2026-11-06 10:00+05:30
+A226=15 | B226=updated_at | C226=TIMESTAMPTZ  |  required | D226=Last change. | E226=Free format (no fixed list)
+B227=↳ | C227=Date-time | D227=Example: 2026-11-06 10:03+05:30 | E227=Set by trigger.
+A229=core.user_consents   |   7 columns (3 with fixed value lists)   |   History of every consent decision (terms, privacy, KYC, marketing) with policy version.
+A230=1 | B230=id | C230=BIGINT (identity)  |  required | D230=Internal row number. | E230=Free format (no fixed list)
+B231=↳ | C231=1, 2, 3 ... | D231=Example: 101
+A232=2 | B232=user_id | C232=UUID  |  required | D232=Whose decision. | E232=Free format (no fixed list)
+B233=↳ | C233=An existing users.user_id | D233=Example: fcba728f-... | E233=ON DELETE RESTRICT.
+A234=3 | B234=consent_type | C234=TEXT  |  required | D234=What the user agrees to. | E234=4 allowed values
+B235=↳ | C235=terms_of_service | D235=App rules. | E235=Required
+B236=↳ | C236=privacy_notice | D236=Privacy notice (DPDP). | E236=Required
+B237=↳ | C237=kyc_verification | D237=Permission for Aadhaar / PAN checks. | E237=Required before KYC
+B238=↳ | C238=marketing | D238=Promotional email / SMS / push. | E238=Optional
+A239=4 | B239=policy_version | C239=TEXT  |  required | D239=Version of the document shown. | E239=Free format (no fixed list)
+B240=↳ | C240=v<major>.<minor> | D240=Example: v2.0 | E240=^v[0-9]{1,3}\.[0-9]{1,3}$.
+A241=5 | B241=decision | C241=TEXT  |  required | D241=What the user chose. | E241=3 allowed values
+B242=↳ | C242=granted | D242=Said yes.
+B243=↳ | C243=declined | D243=Said no.
+B244=↳ | C244=withdrawn | D244=Took back a yes. | E244=Only after granted
+A245=6 | B245=source | C245=TEXT  |  required | D245=Where the decision was made. | E245=4 allowed values
+B246=↳ | C246=signup_flow | D246=Signup screens.
+B247=↳ | C247=settings | D247=Settings screen.
+B248=↳ | C248=admin_console | D248=Support on the user's request.
+B249=↳ | C249=api | D249=Mobile app / other system.
+A250=7 | B250=captured_at | C250=TIMESTAMPTZ  |  required | D250=When the decision was made. | E250=Free format (no fixed list)
+B251=↳ | C251=Date-time | D251=Example: 2026-11-03 10:00+05:30 | E251=Later than the previous decision of that type; not in future.
+A253=core.user_status_history   |   10 columns (2 with fixed value lists)   |   History of every account_status change: from, to, who, why, until when, request.
+A254=1 | B254=id | C254=BIGINT (identity)  |  required | D254=Internal row number. | E254=Free format (no fixed list)
+B255=↳ | C255=1, 2, 3 ... | D255=Example: 58
+A256=2 | B256=user_id | C256=UUID  |  required | D256=Whose status changed. | E256=Free format (no fixed list)
+B257=↳ | C257=An existing users.user_id | D257=Example: 6be8fb9a-... | E257=ON DELETE RESTRICT.
+A258=3 | B258=from_status | C258=TEXT  |  optional | D258=Status before. | E258=Free format (no fixed list)
+B259=↳ | C259=Same 6 values as users.account_status (empty only for signup) | D259=Example: active | E259=Equals the previous row's to_status.
+A260=4 | B260=to_status | C260=TEXT  |  required | D260=Status after. | E260=Free format (no fixed list)
+B261=↳ | C261=limited, active, suspended, deactivated, deletion_pending, deleted | D261=Example: suspended | E261=Only moves in the transition matrix.
+A262=5 | B262=actor_type | C262=TEXT  |  required | D262=Who made the change (review). | E262=4 allowed values
+B263=↳ | C263=user | D263=The account owner.
+B264=↳ | C264=admin | D264=An admin (needs actor_id).
+B265=↳ | C265=support | D265=A support agent (needs actor_id).
+B266=↳ | C266=system | D266=Automatic job / rule (no actor_id).
+A267=6 | B267=actor_id | C267=TEXT  |  optional | D267=Which person exactly (review: TEXT). | E267=Free format (no fixed list) | F267=Modified: TEXT confirmed by DB review
+B268=↳ | C268=admin:<id>, support:<id>, the user's user_id; empty for system | D268=Example: admin:3 | E268=Required for user / admin / support; empty for system; ID characters only, max 100.
+A269=7 | B269=reason_code | C269=TEXT  |  required | D269=Why the status changed (review: document allowed codes). | E269=15 allowed values
+B270=↳ | C270=signup | D270=Account created. | E270=(new) -> limited; user
+B271=↳ | C271=verification_completed | D271=All gates passed. | E271=limited -> active; system
+B272=↳ | C272=verification_reset | D272=Contact changed, must re-verify. | E272=active -> limited; system
+B273=↳ | C273=policy_violation | D273=Broke community rules. | E273=-> suspended; admin/support
+B274=↳ | C274=fraud_suspected | D274=Fraud signals. | E274=-> suspended; system/admin/support
+B275=↳ | C275=report_upheld | D275=A user report was confirmed. | E275=-> suspended; admin/support
+B276=↳ | C276=age_ineligible | D276=Under 18. | E276=-> suspended; system
+B277=↳ | C277=appeal_accepted | D277=Appeal won. | E277=suspended -> active/limited; admin/support
+B278=↳ | C278=suspension_expired | D278=Temporary suspension ended. | E278=suspended -> active/limited; system
+B279=↳ | C279=user_request | D279=User asked (deactivate / delete). | E279=user/support
+B280=↳ | C280=user_returned | D280=User came back. | E280=deactivated -> active/limited; user/support
+B281=↳ | C281=deletion_cancelled | D281=User cancelled deletion. | E281=deletion_pending -> active/limited; user/support
+B282=↳ | C282=grace_period_ended | D282=30-day grace over. | E282=deletion_pending -> deleted; system
+B283=↳ | C283=inactivity | D283=Inactive too long. | E283=system
+B284=↳ | C284=legal_request | D284=Court / government order. | E284=-> deletion_pending; admin/support
+A285=8 | B285=effective_until | C285=TIMESTAMPTZ  |  optional | D285=When a temporary status ends (review). | E285=Free format (no fixed list)
+B286=↳ | C286=Date-time or empty | D286=Example: now() + 30 days | E286=Required for deletion_pending; only for deletion_pending / suspended; in the future.
+A287=9 | B287=request_id | C287=TEXT  |  optional | D287=Request / correlation ID (review). | E287=Free format (no fixed list)
+B288=↳ | C288=ID text, max 100 | D288=Example: req-admin-91 | E288=Never free text.
+A289=10 | B289=created_at | C289=TIMESTAMPTZ  |  required | D289=When it happened. | E289=Free format (no fixed list)
+B290=↳ | C290=Date-time | D290=Example: 2026-11-03 23:08+05:30
+
+SHEET: Status Transitions [state=]
+A1=Account status transitions (users.account_status)
+A2=Row = current status, column = new status. A cell lists the allowed reason codes; grey = not allowed. Enforced by ush_transition_ck. Needs mentor approval.
+A4=From \ To | B4=limited | C4=active | D4=suspended | E4=deactivated | F4=deletion_pending | G4=deleted
+A5=(new) | B5=signup
+A6=limited | C6=verification_completed | D6=policy_violation, fraud_suspected, report_upheld, age_ineligible | E6=user_request, inactivity | F6=user_request, inactivity, legal_request
+A7=active | B7=verification_reset | D7=policy_violation, fraud_suspected, report_upheld, age_ineligible | E7=user_request, inactivity | F7=user_request, inactivity, legal_request
+A8=suspended | B8=appeal_accepted, suspension_expired | C8=appeal_accepted, suspension_expired | F8=user_request, legal_request
+A9=deactivated | B9=user_returned | C9=user_returned | F9=user_request, inactivity, legal_request
+A10=deletion_pending | B10=deletion_cancelled | C10=deletion_cancelled | G10=grace_period_ended
+A11=deleted | B11=final
+A13=Notes
+A14=- deleted is final - no move out of it.
+A15=- Who may do it is also checked: e.g. grace_period_ended and inactivity only by system; policy_violation only by admin/support.
+A16=- Status can change only through core.change_account_status(); every change is written to core.user_status_history.
+A17=- deletion_pending always gets effective_until (default 30 days); suspended may get one (temporary suspension).
+
+SHEET: Rules [state=]
+A1=Rules the database enforces
+A2=Constraints in plain English. Names in brackets are described from the design (exact names in Supabase may differ).
+A4=Table | B4=Constraint / index | C4=Type | D4=Rule in plain English | E4=Change (DB review)
+A5=core.users | B5=users_pk / users_user_id_uq | C5=PK / UNIQUE | D5=id is the row key; user_id is unique and never changes. | E5=New
+A6=core.users | B6=users_account_status_ck / users_verification_status_ck / users_age_status_ck / users_gender_ck | C6=CHECK | D6=Fixed value lists. | E6=New
+A7=core.users | B7=users_deleted_ck | C7=CHECK | D7=account_status = deleted exactly when deleted_at is filled. | E7=New
+A8=core.users | B8=users_dob_range_ck / users_dob_eligible_ck | C8=CHECK | D8=DOB from 1900; eligible needs a DOB. | E8=New
+A9=core.users | B9=(activation guard in change_account_status) | C9=ROUTINE CHECK | D9=-> active only when email + phone + Aadhaar + PAN verified, age eligible and terms, privacy, kyc_verification consents granted. | E9=Modified
+A10=core.auth_identities | B10=auth_identities_provider_ck | C10=CHECK | D10=email_otp, phone_otp, google or apple. | E10=Modified
+A11=core.auth_identities | B11=auth_identities_provider_subject_uq | C11=UNIQUE | D11=The same provider identity cannot belong to two rows. | E11=Modified
+A12=core.auth_identities | B12=auth_identities_otp_subject_ck | C12=CHECK | D12=For email_otp / phone_otp, provider_subject = user_id. | E12=New
+A13=core.auth_identities | B13=auth_identities_unlink_consistency_ck | C13=CHECK | D13=active = no unlink info; unlinked / revoked = unlinked_at + unlink_reason. | E13=New
+A14=core.auth_identities | B14=auth_identities_times_ck | C14=CHECK | D14=last_login_at and unlinked_at not before linked_at. | E14=New
+A15=core.auth_identities | B15=auth_identities_one_active_provider_uq | C15=UNIQUE INDEX | D15=One active identity per provider per user.
+A16=core.user_contacts | B16=user_contacts_user_uq / email_uq / phone_uq | C16=UNIQUE | D16=One contact row per user; one email and one phone per user. | E16=New
+A17=core.user_contacts | B17=user_contacts_email_format_ck / phone_format_ck | C17=CHECK | D17=Email normalised; phone in E.164. | E17=New
+A18=core.user_contacts | B18=user_contacts_version_ck | C18=CHECK | D18=contact_version >= 1.
+A19=core.user_verifications | B19=user_verifications_user_uq | C19=UNIQUE | D19=One latest-summary row per user. | E19=Modified
+A20=core.user_verifications | B20=uv_email_status_ck / uv_phone_status_ck / uv_aadhaar_status_ck / uv_pan_status_ck | C20=CHECK | D20=Fixed value lists. | E20=New
+A21=core.user_verifications | B21=uv_email_result_ck / uv_phone_result_ck | C21=CHECK | D21=verified_at filled exactly when verified. | E21=New
+A22=core.user_verifications | B22=uv_aadhaar_reason_ck / uv_pan_reason_ck | C22=CHECK | D22=Failure reasons from the fixed lists. | E22=New
+A23=core.user_verifications | B23=uv_aadhaar_reason_rule_ck / uv_pan_reason_rule_ck | C23=CHECK | D23=Reason required exactly when failed / review_required; review only for mismatch reasons; too_many_attempts only at 3 tries. | E23=New
+A24=core.user_verifications | B24=uv_aadhaar_attempts_ck / uv_pan_attempts_ck | C24=CHECK | D24=Attempts 0-3; 0 only before start; not still pending at 3. | E24=New
+A25=core.user_verifications | B25=uv_aadhaar_masked_ck / uv_pan_masked_ck | C25=CHECK | D25=Only masked numbers. | E25=New
+A26=core.user_verifications | B26=uv_aadhaar_provider_ck / uv_pan_provider_ck / uv_*_started_ck | C26=CHECK | D26=Provider from the list; required once the check has started. | E26=New
+A27=core.user_verifications | B27=uv_pan_order_ck / uv_pan_after_aadhaar_ck / uv_kyc_times_ck | C27=CHECK | D27=PAN after Aadhaar. | E27=New
+A28=core.user_verifications | B28=uv_aadhaar_hash_uq / uv_pan_hash_uq / uv_hash_len_ck | C28=UNIQUE INDEX / CHECK | D28=One Aadhaar / PAN per account; 32-byte hashes. | E28=New
+A29=core.user_verifications | B29=uv_*_provider_ref_uq | C29=UNIQUE INDEX | D29=A provider transaction is recorded once. | E29=New
+A30=core.user_otp_challenges | B30=uoc_channel_ck / uoc_purpose_ck / uoc_status_ck | C30=CHECK | D30=Fixed value lists.
+A31=core.user_otp_challenges | B31=uoc_one_pending_uq | C31=UNIQUE INDEX | D31=One pending OTP per user + channel + purpose. | E31=Modified
+A32=core.user_otp_challenges | B32=uoc_hmac_len_ck / uoc_destination_hash_ck | C32=CHECK | D32=32-byte hashes. | E32=New
+A33=core.user_otp_challenges | B33=uoc_attempts_ck / uoc_locked_ck | C33=CHECK | D33=0-5 attempts; locked exactly at 5. | E33=New
+A34=core.user_otp_challenges | B34=uoc_times_ck | C34=CHECK | D34=last_sent_at >= sent_at; expires_at after last send; verified_at only when verified. | E34=Modified
+A35=core.user_consents | B35=uc_type_ck / uc_decision_ck / uc_source_ck / uc_version_ck | C35=CHECK | D35=Fixed lists; version format v1.0. | E35=New
+A36=core.user_consents | B36=user_consents_uq | C36=UNIQUE | D36=No duplicate decision. | E36=Modified
+A37=core.user_status_history | B37=ush_transition_ck | C37=CHECK | D37=Only moves in the Status Transitions sheet, with a matching reason.
+A38=core.user_status_history | B38=ush_actor_reason_ck / ush_actor_id_ck | C38=CHECK | D38=Which actor may use which reason; actor_id rules. | E38=New
+A39=core.user_status_history | B39=ush_effective_until_ck / ush_request_id_ck | C39=CHECK | D39=effective_until rules; request_id is an ID. | E39=New
+
+SHEET: Triggers & Routines [state=]
+A1=Triggers, routines and views
+A2=Code the database runs automatically, and the routines the backend calls.
+A4=Name | B4=Table / kind | C4=When it runs | D4=What it does | E4=Change (DB review)
+A5=users_before_write | B5=core.users | C5=Before insert/update | D5=New users start limited; status only via change_account_status(); valid time zone; DOB rules; user_id cannot change; updated_at. | E5=Modified
+A6=users_after_write | B6=core.users | C6=After insert/update | D6=Insert: signup history row + empty user_verifications row. Status change: one history row. | E6=Modified
+A7=auth_identities_before_write | B7=core.auth_identities | C7=Before insert/update | D7=OTP sign-in only with that contact verified; user_id / provider cannot change; no re-activation; updated_at. | E7=New
+A8=user_contacts_before_write | B8=core.user_contacts | C8=Before insert/update | D8=contact_version = 1 on insert, +1 when email / phone changes; user_id cannot change. | E8=Modified
+A9=user_contacts_reset_verification | B9=core.user_contacts | C9=After update of email / phone | D9=That channel -> not_started; its pending OTPs cancelled; active account -> limited (verification_reset). | E9=Modified
+A10=user_verifications_before_write | B10=core.user_verifications | C10=Before insert/update | D10=Phone after email; KYC after email + phone + KYC consent; 3rd failed try -> failed + too_many_attempts. | E10=Modified
+A11=verification_sync | B11=core.user_verifications | C11=After insert/update | D11=Keeps users.verification_status, age_eligibility_status, age_verified_at in step. | E11=Modified
+A12=user_otp_challenges_before_write | B12=core.user_otp_challenges | C12=Before insert/update | D12=contact_version must match; phone signup OTP after email verified; 10-min expiry; 60-s resend; locked at 5. | E12=Modified
+A13=user_consents_guard | B13=core.user_consents | C13=Before insert/update/delete | D13=Append-only; no back-dating; withdraw only after granted. | E13=Modified
+A14=user_status_history_guard | B14=core.user_status_history | C14=Before insert/update/delete | D14=Append-only; rows only from the users trigger. | E14=Modified
+A15=core.change_account_status(...) | B15=routine | C15=Called by backend | D15=Only way to change account_status; activation guard; deletion grace 30 days. | E15=Modified
+A16=core.issue_contact_otp(...) | B16=routine | C16=Called by backend | D16=Cancels the previous pending OTP (after 60 s), stores code + destination hashes, sets the channel pending. | E16=Modified
+A17=core.verify_contact_otp(...) | B17=routine | C17=Called by backend | D17=Checks expiry, contact_version and the code; verified -> channel verified (or last_login_at for login); 5 wrong -> locked -> channel failed. | E17=Modified
+A18=core.run_status_expiry_job() | B18=routine | C18=Daily (pg_cron) | D18=Ends grace periods (-> deleted) and temporary suspensions. | E18=Modified
+A19=core.run_otp_cleanup_job() | B19=routine | C19=Daily (pg_cron) | D19=Expires overdue OTPs; deletes OTP rows older than 30 days. | E19=Modified
+A20=core.user_can_login(user_id) | B20=function | C20=Called by app | D20=Access Rules gate 1 + 5: email + phone verified and account not blocked. | E20=New
+A21=core.user_access_ready(user_id) | B21=function | C21=Called by routines / app | D21=Access Rules gate 3: all checks, age and required consents. | E21=Modified
+A22=core.user_access_level(user_id) | B22=function | C22=Called by app | D22=One word: contact_verification, onboarding_kyc, main_app, kyc_retry_or_review, blocked_lifecycle. | E22=New
+A23=core.user_consents_current | B23=view | C23=Read by app / routines | D23=Latest decision per user per consent type. | E23=Modified
+A24=core.user_verification_progress | B24=view | C24=Read by admin | D24=One row per user: all statuses + failure reasons + all_steps_verified. | E24=Modified
+
+SHEET: Relationships [state=]
+A1=Relationships (foreign keys)
+A2=Every table links to core.users.user_id (UUID) through its own user_id column. ON DELETE RESTRICT everywhere.
+A4=Child table | B4=Column | C4=Parent table | D4=Parent column | E4=Type | F4=On delete | G4=Change (DB review)
+A5=core.auth_identities | B5=user_id | C5=core.users | D5=user_id | E5=Many to one | F5=RESTRICT
+A6=core.user_contacts | B6=user_id | C6=core.users | D6=user_id | E6=One to one | F6=RESTRICT
+A7=core.user_verifications | B7=user_id | C7=core.users | D7=user_id | E7=One to one | F7=RESTRICT | G7=Modified: now from user_verifications
+A8=core.user_otp_challenges | B8=user_id | C8=core.users | D8=user_id | E8=Many to one | F8=RESTRICT
+A9=core.user_consents | B9=user_id | C9=core.users | D9=user_id | E9=Many to one | F9=RESTRICT
+A10=core.user_status_history | B10=user_id | C10=core.users | D10=user_id | E10=Many to one | F10=RESTRICT
+
+SHEET: Open Items [state=]
+A1=Open items - inconsistencies, questions, approvals
+A2=To discuss in the review meeting.
+A4=# | B4=Area | C4=Item | D4=Why it matters | E4=Owner | F4=Status | G4=Change (DB review)
+A5=1 | B5=Decision | C5=Key name: the review calls it subject_ref (users) and user_ref (children); we keep user_id everywhere (team decision, 06 Nov). Same rules: random UUID, UNIQUE, never changes. | D5=Raise Saturday so the review sheet is updated. | E5=Aditya | F5=Applied | G5=New / updated
+A6=2 | B6=Decision | C6=DB review is the final authority (06 Nov): where it conflicts with the MoM of 05 Nov the review wins (failure reasons kept, auth unlink states kept, OTP providers added). | D6=Mentor instruction. | E6=Aditya | F6=Applied | G6=New / updated
+A7=3 | B7=Decision | C7=MoM items the review does not mention are kept: gender (10 values), aadhaar_hash / pan_hash / hash_key_version. | D7=Review silent; MoM still applies. | E7=Aditya -> reviewer | F7=Confirm Sat | G7=New / updated
+A8=4 | B8=Legal | C8=date_of_birth: legal / privacy approval before storing (review). | D8=Optional until approved. | E8=Legal | F8=Open | G8=New / updated
+A9=5 | B9=Legal | C9=aadhaar_hash: UIDAI does not accept hashed Aadhaar as a reference key; DigiLocker may return only the last 4 digits. | D9=If not allowed, leave NULL and use aadhaar_provider_ref. | E9=Legal / tech lead | F9=Open | G9=New / updated
+A10=6 | B10=Confirm | C10=Provider lists: aadhaar_provider (digilocker, kyc_vendor), pan_provider (digilocker, protean, kyc_vendor). | D10=Review: confirm provider options. | E10=Tech lead | F10=Open | G10=New / updated
+A11=7 | B11=Confirm | C11=Limits: 3 KYC tries, 5 OTP tries, 10-min expiry, 60-s resend. | D11=Review: proposed values. | E11=Tech lead / security | F11=Open | G11=New / updated
+A12=8 | B12=Confirm | C12=destination_hash needed? Kept nullable. | D12=Review: confirm necessity and key management. | E12=Tech lead | F12=Open | G12=New / updated
+A13=9 | B13=Team rule | C13=Every user column in every schema: UUID REFERENCES core.users(user_id) ON DELETE RESTRICT. Same name as the review's subject_ref / user_ref, kept as user_id by team decision. | D13=Teammates keep user_id - no FK change for them. | E13=Aditya (lead) | F13=Send to team | G13=New / updated
+A14=10 | B14=To build | C14=Erase routine (checks safety.legal_holds), RLS policies for the app, pg_cron schedules for the two daily jobs. | D14=Production readiness. | E14=Aditya | F14=To build | G14=New / updated
+
+SHEET: Hash - What We Protect [state=]
+A1=Hashing & protection - every sensitive field
+A2=What each sensitive value is, how we protect it now (50-100 users), and what changes as users grow.
+A4=Field(s) | B4=Table | C4=What it is | D4=Sensitivity | E4=Method now (pilot) | F4=Why this method | G4=Secret key lives in | H4=Reversible? | I4=Change at scale | J4=DB change needed | K4=Change (DB review)
+A5=otp_hmac | B5=core.user_otp_challenges | C5=6-digit OTP code | D5=High (short-lived) | E5=HMAC-SHA256 with a secret key (pepper) | F5=Only 1,000,000 possible codes: a plain hash is cracked instantly. The key makes the hash useless without the secret; the 5-attempt limit + 10-min expiry stop guessing. | G5=Backend secret (Supabase Vault / env secret) - never in the table | H5=No | I5=Key moves to cloud KMS; same algorithm | J5=user_otp_challenges.otp_hmac (DB review) | K5=Modified (DB review)
+A6=destination_hash | B6=core.user_otp_challenges | C6=The email / phone the OTP was sent to | D6=Medium | E6=HMAC-SHA256 of the lower-cased address with its own destination key | F6=Proves where a code went and supports abuse checks (many OTPs to one address) without a second plain copy of contact data. | G6=Separate destination key in Vault / KMS | H6=No | I6=Key in KMS; same algorithm | J6=Added destination_hash BYTEA (DB review: add / confirm) | K6=Modified (DB review)
+A7=PAN number (duplicate check) | B7=core.user_verifications | C7=Full PAN, used only to detect 'already_used' | D7=High | E7=Blind index: HMAC-SHA256 of normalised PAN with its own key ('pan:' prefix) | F7=Same PAN always gives the same value, so a UNIQUE index catches duplicates; without the key it cannot be reversed or guessed. | G7=Separate PAN key in Vault / KMS | H7=No | I7=Key in KMS / HSM; optional AES-256-GCM encrypted copy if the full PAN is ever needed | J7=Added pan_hash BYTEA + hash_key_version (MoM 05 Nov decision 3) | K7=Modified (DB review)
+A8=Aadhaar number (duplicate check) | B8=core.user_verifications | C8=Full Aadhaar, used only to detect 'already_used' | D8=Very high (Aadhaar Act) | E8=MoM 05 Nov decision 3: aadhaar_hash (HMAC-SHA256, own key) - only if the provider returns the full number AND legal approves; otherwise leave NULL and use aadhaar_provider_ref | F8=UIDAI: full Aadhaar may be kept only in an Aadhaar Data Vault, and a hashed Aadhaar is not accepted as a reference key - so the legal check comes first. DigiLocker may return only the last 4 digits. | G8=Separate Aadhaar key in Vault / KMS | H8=No | I8=If the company ever becomes a UIDAI requesting entity (AUA/KUA): Aadhaar Data Vault + HSM (FIPS 140-2 Level 3) mandatory | J8=Added aadhaar_hash BYTEA UNIQUE (legal check open) | K8=Modified (DB review)
+A9=aadhaar_masked, pan_masked | B9=core.user_verifications | C9=XXXXXXXX4821 / XXXPX5678K | D9=Medium | E9=Stored as masked text | F9=Already irreversible (only last digits kept). Needed to show the user and support which document was used. | G9=- | H9=No | I9=No change | J9=None | K9=Modified (DB review)
+A10=email, phone_number | B10=core.user_contacts | C10=Contact details | D10=High | E10=Plain text + UNIQUE, protected by RLS, roles and Supabase encryption at rest (destination_hash on each OTP is the only hashed copy - DB review) | F10=Must be read to send OTPs and messages, so it cannot be hashed. For 50-100 users access control is the right level. | G10=Supabase-managed disk encryption | H10=Yes (readable by backend) | I10=Stage 2: encrypt each value with AES-256-GCM (envelope encryption) + blind index (HMAC) for lookup and UNIQUE | J10=Stage 2: email_ciphertext, email_bidx, phone_ciphertext, phone_bidx, key_version | K10=Modified (DB review)
+A11=date_of_birth, gender | B11=core.users | C11=Personal attributes | D11=High | E11=Plain columns, backend-only access (RLS), never sent in full to other users | F11=Needed to calculate age and for profiles/filters; encryption at rest covers the disk. | G11=Supabase-managed disk encryption | H11=Yes | I11=Stage 2-3: column encryption with KMS key if a DPIA/legal asks for it | J11=Optional later
+A12=provider_subject | B12=core.auth_identities | C12=Google / Apple account ID (OTP methods: the user's user_id) | D12=Medium-High | E12=Plain text + UNIQUE, backend only | F12=Must match the exact ID Google/Apple sends at every login. | G12=- | H12=Yes | I12=Optional blind index if the table is exposed to more services | J12=None now | K12=Modified (DB review)
+A13=Session / device / refresh tokens (future) | B13=core.device_tokens / sessions | C13=Long random secrets | D13=High | E13=SHA-256 or HMAC-SHA256 of the token | F13=Tokens are long and random (high entropy), so a fast hash is enough; store only the hash, never the token. | G13=Backend | H13=No | I13=Same | J13=When those tables are built
+A14=Passwords (not used) | B14=- | C14=Login is email OTP / phone OTP / Google / Apple | D14=- | E14=Not stored | F14=No password login in our design. | G14=- | H14=- | I14=If passwords are ever added: Argon2id (m=19 MiB, t=2, p=1) + pepper | J14=Separate credentials table | K14=Modified (DB review)
+
+SHEET: Hash - Methods [state=]
+A1=Hashing & encryption methods compared
+A2=Green row = what we use. Hashing is one-way; encryption is two-way (needs a key to read back).
+A4=Method | B4=How it works | C4=Reversible? | D4=Same input -> same output? | E4=Speed | F4=Good for | G4=Bad for | H4=Our verdict
+A5=Plain SHA-256 | B5=One-way hash of the value | C5=No | D5=Yes | E5=Very fast | F5=Checking file integrity; long random tokens | G5=Short values (OTP, PAN, Aadhaar, phone): all values can be tried in seconds or hours | H5=Never for OTP / PAN / Aadhaar / phone
+A6=Salted SHA-256 | B6=Random salt per row + SHA-256 | C6=No | D6=No (salt differs) | E6=Very fast | F6=Little - still fast to brute-force | G6=Lookups and UNIQUE (different output every time); still fast to crack | H6=Not used
+A7=HMAC-SHA256 (keyed hash / pepper) | B7=SHA-256 mixed with a secret key kept outside the database | C7=No | D7=Yes (same key) | E7=Very fast | F7=OTP codes; duplicate checks; lookups on short values (blind index) | G7=Useless if the key leaks together with the data - so the key must live elsewhere | H7=OUR MAIN METHOD - all stages
+A8=Blind index (HMAC, optionally truncated) | B8=HMAC of a normalised value stored next to encrypted data; can be shortened to a few bytes | C8=No | D8=Yes | E8=Very fast | F8=Search / UNIQUE on encrypted email, phone, PAN | G8=Truncated values can collide; full-length needed when used for UNIQUE | H8=Stage 2 for contacts; full 32 bytes for PAN
+A9=bcrypt | B9=Slow, salted password hash (cost factor) | C9=No | D9=No (salt) | E9=Deliberately slow | F9=Passwords | G9=Lookups/UNIQUE; only first 72 bytes used | H9=Only if passwords are ever added (Argon2id preferred)
+A10=scrypt | B10=Slow, memory-hard password hash | C10=No | D10=No (salt) | E10=Deliberately slow | F10=Passwords | G10=Lookups/UNIQUE | H10=Not needed
+A11=Argon2id | B11=Modern slow, memory-hard password hash (OWASP first choice) | C11=No | D11=No (salt) | E11=Deliberately slow | F11=Passwords (m=19 MiB, t=2, p=1 minimum) | G11=OTP checks at high volume, lookups | H11=Use for passwords only, if ever added
+A12=PBKDF2-HMAC-SHA256 | B12=Slow hash by repeating HMAC many times | C12=No | D12=No (salt) | E12=Slow | F12=Passwords where FIPS is required (600,000 iterations) | G12=Lookups | H12=Not needed
+A13=AES-256-GCM encryption | B13=Two-way: encrypt with a key, decrypt with the same key | C13=Yes (with key) | D13=No (random IV) | E13=Fast | F13=Data the app must read back: email, phone, DOB | G13=Searching / UNIQUE (needs a blind index next to it) | H13=Stage 2 for email / phone
+A14=Envelope encryption | B14=Each value encrypted with a data key; data keys encrypted by a master key in KMS/HSM | C14=Yes (with key) | D14=No | E14=Fast | F14=Many records, easy key rotation (re-wrap data keys, not data) | G14=More moving parts | H14=Stage 2-3
+A15=Tokenisation / reference key (vault) | B15=Real value kept only in a locked vault; other tables hold a random token | C15=Only via the vault | D15=Token is fixed per value | E15=Aadhaar (UIDAI Data Vault model); card data | F15=Needs a separate secure service | G15=Stage 3 / only if we become a UIDAI requesting entity
+A16=Provider token (DigiLocker / vendor reference) | B16=The provider gives an opaque ID for the person; we store only that | C16=No (for us) | D16=Yes (from provider) | E16=- | F16=Duplicate Aadhaar detection without touching the number | G16=Depends on what the provider returns | H16=Preferred for Aadhaar - confirm with vendor
+
+SHEET: Hash - Plan by Scale [state=]
+A1=Protection plan as users grow
+A2=Stage 1 is what we do now. Move to the next stage before reaching its user count, not after.
+A4=Aspect | B4=Stage 1: 50 - 100 users (now) | C4=Stage 2: 1,000 - 100,000 users | D4=Stage 3: 100,000+ users | E4=Why it changes | F4=Change (DB review)
+A5=Hashing algorithm | B5=HMAC-SHA256 for OTP, PAN and Aadhaar (Aadhaar after legal check); masked numbers for display | C5=Same | D5=Same | E5=The algorithm does not get weaker with more users - key handling and coverage are what grow
+A6=Where the secret key lives | B6=Supabase Vault or a backend environment secret (never in code, never in a table column) | C6=Cloud KMS (AWS KMS / Google Cloud KMS); backend asks KMS, key never leaves it | D6=HSM-backed KMS (FIPS 140-2 Level 3); separate key per purpose and environment | E6=More users = bigger damage if the key leaks
+A7=Number of keys | B7=1 OTP key + 1 PAN key, version 1 | C7=Separate keys: OTP, PAN, email index, phone index, encryption | D7=Per-purpose + per-environment keys, access split between teams | E7=One leaked key should not expose everything
+A8=Key rotation | B8=Manual: once a year or immediately after any leak; hash_key_version column ready | C8=Scheduled (e.g. yearly) with dual-read: verify with old + new key, re-hash on next use | D8=Automated rotation with KMS; envelope encryption so data is not re-encrypted | E8=Rotation limits how long a stolen key is useful
+A9=Email / phone | B9=Plain text + RLS + roles + encryption at rest | C9=AES-256-GCM encrypted columns + blind index for login/UNIQUE | D9=Same, plus dedicated contact service; masked in all logs | E9=Base file row 29 already plans ciphertext + keyed lookup hash
+A10=Aadhaar | B10=Masked + aadhaar_hash (if legally allowed) or provider reference | C10=Same | D10=If the company becomes a UIDAI requesting entity: Aadhaar Data Vault + reference keys + HSM | E10=UIDAI rules apply only to requesting entities (AUA/KUA); DigiLocker users keep masked data only
+A11=Access control | B11=RLS on all tables; only backend (service role) can read | C11=Separate DB roles: app_backend, kyc_service, support_readonly, admin | D11=Least privilege per microservice; just-in-time admin access; MFA for admins | E11=DPDP Rule 6(1)(b) - control access
+A12=Logs & monitoring | B12=audit.audit_events for admin actions; no plain contact data in logs | C12=Alerts on unusual reads (bulk exports, many failed OTPs); log retention 1 year | D12=SIEM, 24x7 alerting, regular access reviews | E12=DPDP Rule 6(1)(c),(e): logs, monitoring, keep 1 year
+A13=OTP abuse protection | B13=5 attempts, 10-min expiry, 60-s resend (already in DB) | C13=Plus per-IP / per-device rate limits, CAPTCHA after failures | D13=Plus fraud scoring (SIM swap checks, device fingerprint) | E13=NIST: limit failed attempts; SMS is a 'restricted' channel
+A14=Backups & recovery | B14=Supabase daily backups | C14=Point-in-time recovery; tested restore | D14=Cross-region disaster recovery | E14=DPDP Rule 6(1)(d) - continued processing
+A15=Testing & audits | B15=Our SQL rule tests after every migration | C15=Yearly penetration test; key-handling review | D15=ISO 27001 / SOC 2; DPIA and audit if notified as a Significant Data Fiduciary | E15=Proof that safeguards work
+A16=Effort / cost | B16=Very low: built-in Supabase features + a few lines of code | C16=Medium: KMS (low monthly cost), encryption code, reviews | D16=High: HSM, vault service, audits, security team | E16=Spend grows with risk and legal duty
+A19=Rules for every stage
+A20=Rule | B20=Why
+A21=Never store the secret key in the database or in code | B21=If the key sits next to the hashes, the HMAC gives no protection.
+A22=One key per purpose | B22=OTP key, PAN key and email-index key are different, so one leak does not expose everything.
+A23=Normalise before hashing | B23=PAN: trim + uppercase. Aadhaar: digits only. Email: trim + lowercase. Phone: E.164. Otherwise the same value gives different hashes.
+A24=Add a purpose prefix | B24=Hash 'pan:ABCPX1234K', not 'ABCPX1234K', so values from different fields can never collide.
+A25=Store a key version | B25=hash_key_version tells which key made the hash, so keys can be rotated safely.
+A26=Compare in constant time | B26=Use crypto.timingSafeEqual (Node) when checking an OTP, so timing does not leak the code.
+A27=Never log plain values | B27=No OTP, PAN, Aadhaar, email or phone in logs or error messages (base file: audit metadata excludes contact data).
+A28=Limit attempts | B28=Hashing protects stored data; attempt limits protect the live check. Both are needed.
+A29=Prefer not storing at all | B29=The safest Aadhaar is the one you never store: masked value + provider token only.
+
+SHEET: Hash - Sources [state=]
+A1=Sources for the hashing research
+A2=Researched 05 Nov 2026.
+A4=Source | B4=Link | C4=What we used from it
+A5=OWASP Password Storage Cheat Sheet | B5=https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html | C5=Argon2id / bcrypt / scrypt / PBKDF2 parameters; peppering
+A6=OWASP Cryptographic Storage Cheat Sheet | B6=https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html | C6=AES-GCM, key management, keep keys away from data
+A7=NIST SP 800-63B, section 5 (authenticators) | B7=https://github.com/usnistgov/800-63-3/blob/nist-pages/sp800-63b/sec5_authenticators.md | C7=Secret salt stored separately; limit failed attempts; SMS is restricted
+A8=UIDAI - Aadhaar Data Vault FAQs (2017) | B8=https://uidai.gov.in/images/resource/FAQs_Aadhaar_Data_Vault_v__1_0_13122017.pdf | C8=Reference keys, HSM, AES-256, who must comply
+A9=UIDAI Circular No. 14 of 2025 | B9=https://www.uidai.gov.in/images/Circular-No.14_of-2025.pdf | C9=Vault + HSM (FIPS 140-2 L3) for requesting entities; hashed Aadhaar not a reference key
+A10=Mondaq - clarifications on Aadhaar Data Vault applicability | B10=https://www.mondaq.com/india/privacy-protection/1719124/vaulting-to-safety-uidai-issues-clarifications-on-applicability-of-aadhaar-data-vault-requirements | C10=Vault applies to requesting entities (AUA/KUA), not offline-verification entities
+A11=DPDP Rules 2025 - Rule 6 | B11=https://www.dpdpa.com/dpdparules/rule6.html | C11=Encryption, masking, virtual tokens, access control, logs kept 1 year, backups
+A12=Supabase - pgsodium (pending deprecation) / Vault | B12=https://supabase.com/docs/guides/database/extensions/pgsodium | C12=Use Supabase Vault for secrets; pgsodium column encryption not recommended
+A13=CipherSweet - blind index internals | B13=https://ciphersweet.paragonie.com/internals/blind-index | C13=How keyed blind indexes support search on encrypted data

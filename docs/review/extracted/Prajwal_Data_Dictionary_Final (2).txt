@@ -1,0 +1,723 @@
+﻿SOURCE: Prajwal_Data_Dictionary_Final (2).xlsx
+
+SHEET: Read Me [state=visible]
+A1=Data Dictionary - Prajwal (5 tables)
+A2=Schema: core - prepared 07 Nov 2026 from the seed SQL ('167430e9-attachment.txt') and 'Prajwal_Table_Actions_Review' with the DB review fixes applied
+A4=What this is | B4=Every table, column and allowed value of Prajwal's 5 tables: connection_intents, connection_requests, blocks, user_pseudonyms, profile_media. Other members' tables are not included. The seed data is on the last five tabs as supplied (before the fixes).
+A5=YELLOW rows | B5=New or modified compared with the seed SQL and base file. The 'Change' column says exactly what changed. Removed items are listed in 'Values Not Kept'.
+A6=How to read it | B6=Tables -> Data Dictionary (every column) -> Value Lists (table > column > values; the 110 intents are grouped by category) -> Relationships.
+A7=Link to users | B7=Every user reference is <column> UUID REFERENCES core.users(user_id) ON DELETE RESTRICT. core.users belongs to the identity team. The seed still uses TEXT slugs - see Open Items.
+A8=Common rules | B8=ON DELETE RESTRICT everywhere. Columns, types and rules come from the reviewed data dictionary and the Table Actions Review; status and type lists are named CHECKs. No CREATE TABLE text was supplied, so constraint details are taken from those two files. Dropped values are in Values Not Kept.
+A9=Key words | B9=PK = primary key. FK = link to another table. UNIQUE = no duplicates. CHECK = rule the database enforces.
+
+SHEET: What Changed [state=visible]
+A1=What changed from the original workbook
+A2=Review fixes applied in this dictionary.
+A4=Type | B4=Item | C4=What changed
+A5=Scope | B5=Prajwal's 5 tables only | C5=connection_intents (110 seeded rows), connection_requests (15), blocks (15), user_pseudonyms (7), profile_media (10). Reviewed against the Table Actions Review and the seed SQL.
+A6=Added | B6=Review-fix columns | C6=connection_intents: created_at, updated_at. blocks: id, expires_at. profile_media: media_id, sort_order, purged_at. (connection_requests gets id in place of request_id.)
+A7=Modified | B7=All user columns (6) | C7=UUID, FK -> core.users(user_id) ON DELETE RESTRICT: sender, recipient, blocker, blocked, pseudonym user, media user. The seed used TEXT slugs such as aarav_sharma.
+A8=Modified | B8=connection_requests keys | C8=request_id (req001) -> id BIGINT identity, so core.connections.created_from_request_id can use the same type. UNIQUE (sender_user_id, idempotency_key); one pending request per sender-recipient pair; reverse pending request accepted instead.
+A9=Modified | B9=connection_requests values | C9=category: 5 canonical values only. source_context: 5 values (replaces source_channel). status: 6 values. responded_at only when not pending; expires_at default 30 days; cooldown_until set on decline.
+A10=Modified | B10=blocks | C10=One active block per directed pair (partial UNIQUE where removed_at IS NULL); block_type, source, source_context and reason_code as named CHECKs; PK is a generated id.
+A11=Modified | B11=user_pseudonyms | C11=pseudonym_id pd_001 -> UUID. One handle per row (3 seed rows held two). UNIQUE (scope, handle); one active default per user and scope; rotated_at tied to status.
+A12=Modified | B12=profile_media | C12=Several media per user (media_id + sort_order); opaque object keys; moderation default pending; lifecycle checks on deleted_at / purged_at / purge_after.
+A13=Modified | B13=connection_intents | C13=Lookup table with PK intent_code; category (5 codes) and status as named CHECKs; sort_order restarts in each category. intent_id from the seed is kept as UNIQUE.
+A14=Modified | B14=Seed ON CONFLICT targets | C14=blocks: (blocker_user_id, blocked_user_id) WHERE removed_at IS NULL. user_pseudonyms: (scope, handle). profile_media: object_key. The seed SQL still uses blocker_user_id and user_id alone.
+A15=Added | B15=blocks.source_context | C15=Kept from the seed and the action list although the final dictionary does not list it. Needs confirmation (Open Items).
+A16=Not included | B16=Base-file columns and old IDs | C16=request_id, pd_NNN IDs, and columns of the base file that are in neither the final dictionary nor the seed (see 'Values Not Kept').
+A17=Not included | B17=Other taxonomy labels | C17=connection_requests.category keeps 5 values; the longer taxonomy list (including dating / romance) is not stored.
+A18=Not included | B18=Open points | C18=50-code block reason list, overlapping reason / intent codes and 6 mismatched intent labels are not changed - they wait for approval (Open Items).
+
+SHEET: Tables [state=visible]
+A1=Tables overview
+A2=Prajwal's 5 tables. 'Columns' counted live from the Data Dictionary sheet.
+A4=# | B4=Table | C4=What it stores | D4=One row means | E4=Columns | F4=Change
+A5=1.0 | B5=core.connection_intents | C5=Lookup of the 110 connection intents a user can pick, in 5 categories. | D5=One row per intent | E5=8 | F5=Modified: lookup table with PK intent_code; category and status as named CHECKs; intent_id kept from seed
+A6=2.0 | B6=core.connection_requests | C6=Requests one user sends to another to connect, with category, intent, source, status and expiry. | D6=One row per request from one user to another | E6=13 | F6=Modified: BIGINT id; UUID users; 5 categories; 6 statuses; pending-pair and reverse-request rules; 30-day expiry
+A7=3.0 | B7=core.blocks | C7=Blocks one user places on another, with type, reason and source. | D7=One row per block of one user by another | E7=10 | F7=Modified: id and expires_at added; one active block per pair; reason list as named CHECK
+A8=4.0 | B8=core.user_pseudonyms | C8=Aliases a user shows in each scope (public networking, blind recruiting ...). | D8=One row per alias of one user in one scope | E8=8 | F8=Modified: UUID id; one handle per row; one active default per scope; rotated_at tied to status
+A9=5.0 | B9=core.profile_media | C9=Profile photos, videos and audio with moderation and deletion state. | D9=One row per media file of one user | E9=12 | F9=Modified: media_id, sort_order, purged_at added; opaque keys; lifecycle checks
+D10=Total columns | E10=51
+
+SHEET: Data Dictionary [state=visible]
+A1=Data dictionary - every column
+A2=Filter by Table. Yellow = new, modified or flagged.
+A4=Table | B4=# | C4=Column | D4=Data type | E4=Required | F4=Default | G4=Key | H4=Possible values | I4=Meaning | J4=Example | K4=Rules | L4=Change
+A5=core.connection_intents | B5=1.0 | C5=intent_id | D5=VARCHAR(20) | E5=Yes | G5=UNIQUE | H5=int_001 ... int_110 | I5=Stable row ID of the intent. | J5=int_001 | K5=Seeded as int_NNN; 110 distinct values. | L5=New: kept from the seed; the primary key stays intent_code (confirm in Open Items)
+A6=core.connection_intents | B6=2.0 | C6=intent_code | D6=VARCHAR(40) | E6=Yes | G6=PK | H6=110 codes - see Value Lists | I6=Unique code of the intent. | J6=mentorship | K6=CHECK intent_code ~ '^[a-z0-9_]+$'. Longest seeded code: 23 chars. | L6=Modified: PK of a lookup table (base file had id + user_id)
+A7=core.connection_intents | B7=3.0 | C7=display_label | D7=VARCHAR(80) | E7=Yes | G7=UNIQUE | H7=Text shown in the app | I7=Name users see. | J7=Seek Mentorship | K7=All 110 labels are distinct (longest 32 chars). 6 labels do not match their code - see Open Items. | L7=New: label shown in the picker
+A8=core.connection_intents | B8=4.0 | C8=category | D8=VARCHAR(40) | E8=Yes | H8=5 codes - see Value Lists | I8=Main type of intent. | J8=professional_general_networking | K8=Named CHECK on 5 category codes (50 + 30 + 10 + 10 + 10 intents). | L8=New: category stored as a code
+A9=core.connection_intents | B9=5.0 | C9=status | D9=VARCHAR(20) | E9=Yes | F9='active' | H9=active, inactive | I9=Can users still pick it? | J9=active | K9=Named CHECK. All 110 seeded rows are active.
+A10=core.connection_intents | B10=6.0 | C10=sort_order | D10=SMALLINT | E10=No | F10=NULL | H10=1, 2, 3 ... | I10=Order in the picker. | J10=1 | K10=CHECK sort_order > 0. Restarts at 1 in each category (unique per category + sort_order). | L10=New: picker order
+A11=core.connection_intents | B11=7.0 | C11=created_at | D11=TIMESTAMPTZ | E11=Yes | F11=NOW() | H11=Date and time | I11=When added. | J11=2026-11-05 10:00+05:30 | K11=Not supplied by the seed; default applies. | L11=New: audit field
+A12=core.connection_intents | B12=8.0 | C12=updated_at | D12=TIMESTAMPTZ | E12=Yes | F12=NOW() | H12=Date and time | I12=Last change. | J12=2026-11-05 10:00+05:30 | K12=Set by trigger. | L12=New: audit field
+A13=core.connection_requests | B13=1.0 | C13=id | D13=BIGINT identity | E13=Yes | F13=auto | G13=PK | H13=1, 2, 3 ... | I13=Request ID. | J13=1 | K13=Generated always. core.connections.created_from_request_id uses the same type. | L13=Modified: seed request_id (req001) -> BIGINT identity like the other team tables
+A14=core.connection_requests | B14=2.0 | C14=sender_user_id | D14=UUID | E14=Yes | G14=FK | H14=FK -> core.users(user_id) ON DELETE RESTRICT | I14=User who sends. | J14=fcba728f-... | K14=CHECK sender_user_id <> recipient_user_id. Cannot send while either user has an active full block (trigger). INDEX on (sender_user_id, created_at). | L14=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A15=core.connection_requests | B15=3.0 | C15=recipient_user_id | D15=UUID | E15=Yes | G15=FK | H15=FK -> core.users(user_id) ON DELETE RESTRICT | I15=User who receives. | J15=6be8fb9a-... | K15=Partial UNIQUE (sender_user_id, recipient_user_id) WHERE status = 'pending'. If the recipient already has a pending request to the sender, accept that one instead (trigger). | L15=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A16=core.connection_requests | B16=4.0 | C16=category | D16=VARCHAR(20) | E16=Yes | H16=collaboration, colleague, friendship, mentorship, networking | I16=Kind of connection asked for. | J16=mentorship | K16=Named CHECK on the 5 canonical values. | L16=Modified: only the 5 canonical categories kept (other taxonomy labels not kept)
+A17=core.connection_requests | B17=5.0 | C17=intent_code | D17=VARCHAR(40) | E17=No | F17=NULL | G17=FK | H17=FK -> core.connection_intents(intent_code) ON DELETE RESTRICT | I17=Exact intent behind the request. | J17=collaborating | K17=Optional detail under category. All 15 seeded codes exist.
+A18=core.connection_requests | B18=6.0 | C18=source_context | D18=VARCHAR(30) | E18=No | F18=NULL | H18=events, mutual_connections, profile, search, suggestions | I18=Where the sender found the recipient. | J18=suggestions | K18=Named CHECK on 5 values. | L18=Modified: replaces source_channel (recommendation -> suggestions; events, mutual_connections added)
+A19=core.connection_requests | B19=7.0 | C19=status | D19=VARCHAR(20) | E19=Yes | F19='pending' | H19=pending, accepted, declined, withdrawn, cancelled, expired | I19=Request lifecycle. | J19=pending | K19=Named CHECK. Seed uses 5 of 6 (accepted 7, declined 2, expired 1, pending 4, withdrawn 1). accepted creates a core.connections row.
+A20=core.connection_requests | B20=8.0 | C20=reason_text | D20=VARCHAR(300) | E20=No | F20=NULL | H20=Free text, up to 300 characters | I20=Short note to the recipient. | J20=Saw your talk at the meetup. | K20=CHECK char_length <= 300. Longest seeded note: 73 chars. | L20=Modified: length limit
+A21=core.connection_requests | B21=9.0 | C21=idempotency_key | D21=VARCHAR(255) | E21=No | F21=NULL | G21=UNIQUE with sender_user_id | H21=Text key or NULL | I21=Stops duplicates on retry. | J21=idem_net_001 | K21=UNIQUE (sender_user_id, idempotency_key). 15 distinct seeded keys.
+A22=core.connection_requests | B22=10.0 | C22=created_at | D22=TIMESTAMPTZ | E22=Yes | F22=NOW() | H22=Date and time | I22=When sent. | J22=2026-11-05 10:00+05:30
+A23=core.connection_requests | B23=11.0 | C23=responded_at | D23=TIMESTAMPTZ | E23=No | F23=NULL | H23=Date and time; NULL while pending | I23=When accepted / declined / withdrawn / cancelled. | J23=2026-11-06 09:00+05:30 | K23=Filled exactly when status <> 'pending' (except expired); >= created_at. | L23=Modified: tied to status
+A24=core.connection_requests | B24=12.0 | C24=expires_at | D24=TIMESTAMPTZ | E24=Yes | F24=created_at + 30 days | H24=Date and time | I24=When a pending request expires. | J24=2026-12-05 10:00+05:30 | K24=CHECK expires_at > created_at. Index WHERE status = 'pending'. Seed: 14 rows use 30 days, req015 uses 7. | L24=Modified: default 30 days
+A25=core.connection_requests | B25=13.0 | C25=cooldown_until | D25=TIMESTAMPTZ | E25=No | F25=NULL | H25=Date and time | I25=Sender cannot re-send to this recipient before this. | J25=2026-12-06 09:00+05:30 | K25=Set when declined (seed: 31 days after responded_at); >= created_at. | L25=Modified: when it is set
+A26=core.blocks | B26=1.0 | C26=id | D26=BIGINT identity | E26=Yes | F26=auto | G26=PK | H26=1, 2, 3 ... | I26=Block ID. | J26=1 | K26=Generated always. | L26=Modified: replaces PK (blocker, blocked, created_at) - simpler to link from reports
+A27=core.blocks | B27=2.0 | C27=blocker_user_id | D27=UUID | E27=Yes | G27=FK | H27=FK -> core.users(user_id) ON DELETE RESTRICT | I27=User who blocks. | J27=fcba728f-... | K27=CHECK blocker_user_id <> blocked_user_id. | L27=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A28=core.blocks | B28=3.0 | C28=blocked_user_id | D28=UUID | E28=Yes | G28=FK | H28=FK -> core.users(user_id) ON DELETE RESTRICT | I28=User who is blocked. | J28=6be8fb9a-... | K28=Partial UNIQUE (blocker_user_id, blocked_user_id) WHERE removed_at IS NULL: one active block per pair. Index on blocked_user_id. | L28=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A29=core.blocks | B29=4.0 | C29=block_type | D29=VARCHAR(20) | E29=Yes | F29='full' | H29=dms_only, full, mute, soft_block | I29=How strong the block is. | J29=full | K29=Named CHECK. Seed: dms_only 3, full 7, mute 3, soft_block 2.
+A30=core.blocks | B30=5.0 | C30=reason_code | D30=VARCHAR(50) | E30=No | F30=NULL | H30=15 seeded codes - see Value Lists | I30=Why the user blocked. | J30=spam | K30=Named CHECK on the approved reason list. The full 50-code list is still to be supplied; 3 sets of seeded codes overlap. | L30=Modified: named CHECK on the reason list (seeded codes shown)
+A31=core.blocks | B31=6.0 | C31=source | D31=VARCHAR(20) | E31=Yes | F31='user' | H31=user, moderator | I31=Who created the block. | J31=user | K31=Named CHECK. Seed: user 12, moderator 3.
+A32=core.blocks | B32=7.0 | C32=source_context | D32=VARCHAR(30) | E32=No | F32=NULL | H32=comments, direct_message, group_chat, profile_page, search_results | I32=Where the block was made. | J32=direct_message | K32=Named CHECK on 5 values. | L32=New: kept from the seed and the action list (not in the final dictionary) - confirm
+A33=core.blocks | B33=8.0 | C33=created_at | D33=TIMESTAMPTZ | E33=Yes | F33=NOW() | H33=Date and time | I33=When blocked. | J33=2026-11-05 10:00+05:30 | K33=Seed writes now() - INTERVAL values, so times change on every run.
+A34=core.blocks | B34=9.0 | C34=expires_at | D34=TIMESTAMPTZ | E34=No | F34=NULL | H34=Date and time; NULL = until removed | I34=End of a temporary block. | J34=2026-12-05 10:00+05:30 | K34=CHECK expires_at > created_at. | L34=New: temporary blocks
+A35=core.blocks | B35=10.0 | C35=removed_at | D35=TIMESTAMPTZ | E35=No | F35=NULL | H35=Date and time; NULL while active | I35=When unblocked. | K35=CHECK removed_at >= created_at. All 15 seeded blocks are active.
+A36=core.user_pseudonyms | B36=1.0 | C36=pseudonym_id | D36=UUID | E36=Yes | F36=gen_random_uuid() | G36=PK | H36=UUID | I36=Pseudonym ID. | J36=3f2b9c1e-... | K36=Server generated. | L36=Modified: seed text ID (pd_001) -> UUID
+A37=core.user_pseudonyms | B37=2.0 | C37=user_id | D37=UUID | E37=Yes | G37=FK | H37=FK -> core.users(user_id) ON DELETE RESTRICT | I37=Owner of the pseudonym. | J37=fcba728f-... | K37=INDEX on (user_id, scope, status). Never exposed in public APIs or logs. | L37=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A38=core.user_pseudonyms | B38=3.0 | C38=handle | D38=VARCHAR(100) | E38=Yes | G38=UNIQUE with scope | H38=Handle text | I38=Alias shown instead of the real name. | J38=shadow_falcon | K38=UNIQUE (scope, handle), case / Unicode normalised. One handle per row. | L38=Modified: seed had two handles in one cell on 3 rows - now one row per handle
+A39=core.user_pseudonyms | B39=4.0 | C39=scope | D39=VARCHAR(30) | E39=Yes | H39=anonymous_feedback, blind_recruiting, community_forum, public_networking, private_group | I39=Where the alias is used. | J39=public_networking | K39=Named CHECK on 5 scopes (private_group not seeded). | L39=New: named CHECK
+A40=core.user_pseudonyms | B40=5.0 | C40=status | D40=VARCHAR(20) | E40=Yes | F40='active' | H40=active, rotated, revoked, dormant | I40=Alias lifecycle. | J40=active | K40=Named CHECK. A revoked alias is not reactivated without policy approval.
+A41=core.user_pseudonyms | B41=6.0 | C41=is_default | D41=BOOLEAN | E41=Yes | F41=FALSE | H41=TRUE, FALSE | I41=Default alias for the scope. | J41=TRUE | K41=Partial UNIQUE (user_id, scope) WHERE is_default AND status = 'active'. | L41=New: one active default per user and scope
+A42=core.user_pseudonyms | B42=7.0 | C42=created_at | D42=TIMESTAMPTZ | E42=Yes | F42=NOW() | H42=Date and time | I42=When created. | J42=2026-10-15 09:00+05:30
+A43=core.user_pseudonyms | B43=8.0 | C43=rotated_at | D43=TIMESTAMPTZ | E43=No | F43=NULL | H43=Date and time; NULL if never rotated | I43=When the alias was rotated. | J43=2026-10-17 13:59+05:30 | K43=Required when status = rotated (seed pd_002 has a date but status active). | L43=Modified: TIMESTAMPTZ NULL, tied to status
+A44=core.profile_media | B44=1.0 | C44=media_id | D44=UUID | E44=Yes | F44=gen_random_uuid() | G44=PK | H44=UUID | I44=Stable media ID. | J44=9d41c7aa-... | K44=Generated by the server. | L44=New: ID so a user can have several media (review fix)
+A45=core.profile_media | B45=2.0 | C45=user_id | D45=UUID | E45=Yes | G45=FK | H45=FK -> core.users(user_id) ON DELETE RESTRICT | I45=Owner of the media. | J45=fcba728f-... | K45=INDEX on (user_id, lifecycle_status, sort_order). | L45=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+A46=core.profile_media | B46=3.0 | C46=storage_bucket | D46=VARCHAR(60) | E46=Yes | H46=quarantine-profile-media, user-profile-media-prod | I46=Bucket holding the file. | J46=user-profile-media-prod | K46=Buckets are private; rejected media goes to the quarantine bucket.
+A47=core.profile_media | B47=4.0 | C47=object_key | D47=VARCHAR(255) | E47=Yes | G47=UNIQUE | H47=Opaque key, e.g. media/photos/<random>.jpg | I47=Path of the file in the bucket. | J47=media/photos/aarav_avatar.jpg | K47=Generated by the server; users never supply paths. | L47=Modified: opaque server-generated key (seed keys are readable file names)
+A48=core.profile_media | B48=5.0 | C48=media_type | D48=VARCHAR(20) | E48=Yes | H48=audio, image, video | I48=Kind of file. | J48=image | K48=Named CHECK. Real file type is also checked at upload. Seed: audio 2, image 6, video 2.
+A49=core.profile_media | B49=6.0 | C49=moderation_status | D49=VARCHAR(20) | E49=Yes | F49='pending' | H49=pending, approved, rejected, quarantined | I49=Review result. | J49=approved | K49=Named CHECK. Only approved media is served (seed neha_joshi audio is pending). | L49=Modified: default pending
+A50=core.profile_media | B50=7.0 | C50=lifecycle_status | D50=VARCHAR(20) | E50=Yes | F50='active' | H50=active, deleted, purged | I50=Storage lifecycle. | J50=active | K50=Named CHECK. active: deleted_at and purged_at NULL; deleted: deleted_at set; purged: both set. | L50=Modified: lifecycle consistency checks
+A51=core.profile_media | B51=8.0 | C51=sort_order | D51=SMALLINT | E51=Yes | F51=0 | H51=0, 1, 2 ... | I51=Order of media on the profile. | J51=0 | K51=CHECK sort_order >= 0. Changed in one transaction. | L51=New: ordering (review fix)
+A52=core.profile_media | B52=9.0 | C52=created_at | D52=TIMESTAMPTZ | E52=Yes | F52=NOW() | H52=Date and time | I52=When uploaded. | J52=2026-11-05 10:00+05:30 | K52=Seed writes now() - INTERVAL values.
+A53=core.profile_media | B53=10.0 | C53=deleted_at | D53=TIMESTAMPTZ | E53=No | F53=NULL | H53=Date and time; NULL if not deleted | I53=When soft-deleted. | K53=Only the vikram_nair seed row has a value.
+A54=core.profile_media | B54=11.0 | C54=purge_after | D54=TIMESTAMPTZ | E54=No | F54=NULL | H54=Date and time; NULL if not scheduled | I54=Earliest time the file may be purged. | K54=>= deleted_at. Policy driven (seed: 30 days after deletion).
+A55=core.profile_media | B55=12.0 | C55=purged_at | D55=TIMESTAMPTZ | E55=No | F55=NULL | H55=Date and time; NULL until purged | I55=When the file was removed from storage. | K55=Set only after the object is verified deleted. | L55=New: purge tracking (review fix)
+
+SHEET: Value Lists [state=visible]
+A1=Value lists - table > column > allowed values
+A2=Each table (dark band) lists all its columns; under each column its allowed values or its format. Use + / - on the left to collapse. Counts are live formulas over the seed tabs.
+A4=# | B4=Column | C4=Value / format | D4=Meaning | E4=When / notes | F4=Change
+A5=core.connection_intents   |   8 columns (3 with fixed values) | F5=Modified
+A6=1.0 | B6=intent_id | C6=VARCHAR(20)  |  required | D6=Stable row ID of the intent. | E6=Free format | F6=New: kept from the seed; the primary key stays intent_code (confirm in Open Items)
+B7=↳ | C7=int_001 ... int_110 | D7=Example: int_001 | E7=Seeded as int_NNN; 110 distinct values.
+A8=2.0 | B8=intent_code | C8=VARCHAR(40)  |  required | D8=Unique code of the intent. | E8=110 codes in 5 groups | F8=Modified: PK of a lookup table (base file had id + user_id)
+B9=↳ | C9=professional_general_networking | D9=Category group - 50 codes
+B10=↳ | C10=networking | D10=Professional Networking | E10=int_001  |  sort 1  |  used in 3 request(s)
+B11=↳ | C11=advisory | D11=Technical Advisory | E11=int_002  |  sort 2  |  used in 0 request(s)
+B12=↳ | C12=mentorship | D12=Seek Mentorship | E12=int_003  |  sort 3  |  used in 1 request(s)
+B13=↳ | C13=collaborating | D13=Open Source Collaboration | E13=int_004  |  sort 4  |  used in 1 request(s)
+B14=↳ | C14=co_founding | D14=Seek Co-Founder | E14=int_005  |  sort 5  |  used in 0 request(s)
+B15=↳ | C15=hiring | D15=Hiring Engineers | E15=int_006  |  sort 6  |  used in 0 request(s)
+B16=↳ | C16=mentoring | D16=Provide Mentorship | E16=int_007  |  sort 7  |  used in 0 request(s)
+B17=↳ | C17=speaking_events | D17=Conference & Event Speaking | E17=int_008  |  sort 8  |  used in 0 request(s)
+B18=↳ | C18=knowledge_sharing | D18=Knowledge Sharing | E18=int_009  |  sort 9  |  used in 1 request(s)
+B19=↳ | C19=job_seeking | D19=Exploring Opportunities | E19=int_010  |  sort 10  |  used in 0 request(s)
+B20=↳ | C20=career_growth | D20=Career Growth | E20=int_011  |  sort 11  |  used in 0 request(s)
+B21=↳ | C21=internships | D21=Internship Opportunities | E21=int_012  |  sort 12  |  used in 0 request(s)
+B22=↳ | C22=referrals | D22=Referrals & Recommendations | E22=int_013  |  sort 13  |  used in 0 request(s)
+B23=↳ | C23=recruiting | D23=Recruiting Talent | E23=int_014  |  sort 14  |  used in 0 request(s)
+B24=↳ | C24=freelancing | D24=Freelance Work | E24=int_015  |  sort 15  |  used in 0 request(s)
+B25=↳ | C25=consulting | D25=Consulting Engagements | E25=int_016  |  sort 16  |  used in 0 request(s)
+B26=↳ | C26=partnerships | D26=Business Partnerships | E26=int_017  |  sort 17  |  used in 0 request(s)
+B27=↳ | C27=startup_collaboration | D27=Startup Collaboration | E27=int_018  |  sort 18  |  used in 0 request(s)
+B28=↳ | C28=product_feedback | D28=Product Feedback | E28=int_019  |  sort 19  |  used in 0 request(s)
+B29=↳ | C29=product_testing | D29=Beta / Product Testing | E29=int_020  |  sort 20  |  used in 0 request(s)
+B30=↳ | C30=technical_discussion | D30=Technical Discussion | E30=int_021  |  sort 21  |  used in 0 request(s)
+B31=↳ | C31=code_review | D31=Code Review | E31=int_022  |  sort 22  |  used in 0 request(s)
+B32=↳ | C32=pair_programming | D32=Pair Programming | E32=int_023  |  sort 23  |  used in 0 request(s)
+B33=↳ | C33=project_collaboration | D33=Project Collaboration | E33=int_024  |  sort 24  |  used in 0 request(s)
+B34=↳ | C34=research_collaboration | D34=Research Collaboration | E34=int_025  |  sort 25  |  used in 0 request(s)
+B35=↳ | C35=data_science | D35=Data Science | E35=int_026  |  sort 26  |  used in 0 request(s)
+B36=↳ | C36=ai_ml | D36=AI & Machine Learning | E36=int_027  |  sort 27  |  used in 1 request(s)
+B37=↳ | C37=web_development | D37=Web Development | E37=int_028  |  sort 28  |  used in 0 request(s)
+B38=↳ | C38=mobile_development | D38=Mobile Development | E38=int_029  |  sort 29  |  used in 0 request(s)
+B39=↳ | C39=cloud_computing | D39=Cloud Computing | E39=int_030  |  sort 30  |  used in 1 request(s)
+B40=↳ | C40=cybersecurity | D40=Cybersecurity | E40=int_031  |  sort 31  |  used in 0 request(s)
+B41=↳ | C41=devops | D41=DevOps & Infrastructure | E41=int_032  |  sort 32  |  used in 0 request(s)
+B42=↳ | C42=open_source | D42=Open Source | E42=int_033  |  sort 33  |  used in 1 request(s)
+B43=↳ | C43=design_collaboration | D43=Design Collaboration | E43=int_034  |  sort 34  |  used in 0 request(s)
+B44=↳ | C44=content_creation | D44=Content Creation | E44=int_035  |  sort 35  |  used in 0 request(s)
+B45=↳ | C45=technical_writing | D45=Technical Writing | E45=int_036  |  sort 36  |  used in 0 request(s)
+B46=↳ | C46=speaking_opportunities | D46=Speaking Opportunities | E46=int_037  |  sort 37  |  used in 0 request(s)
+B47=↳ | C47=investor_relations | D47=Investor Relations | E47=int_038  |  sort 38  |  used in 0 request(s)
+B48=↳ | C48=fundraising | D48=Fundraising | E48=int_039  |  sort 39  |  used in 0 request(s)
+B49=↳ | C49=academic_research | D49=Academic Research | E49=int_040  |  sort 40  |  used in 0 request(s)
+B50=↳ | C50=industry_insights | D50=Industry Insights | E50=int_041  |  sort 41  |  used in 0 request(s)
+B51=↳ | C51=sales_partnerships | D51=Sales Partnerships | E51=int_042  |  sort 42  |  used in 0 request(s)
+B52=↳ | C52=marketing_collaboration | D52=Marketing Collaboration | E52=int_043  |  sort 43  |  used in 0 request(s)
+B53=↳ | C53=brand_building | D53=Brand Building | E53=int_044  |  sort 44  |  used in 0 request(s)
+B54=↳ | C54=product_management | D54=Product Management | E54=int_045  |  sort 45  |  used in 0 request(s)
+B55=↳ | C55=ux_research | D55=UX Research | E55=int_046  |  sort 46  |  used in 0 request(s)
+B56=↳ | C56=legal_advisory | D56=Legal Advisory | E56=int_047  |  sort 47  |  used in 0 request(s)
+B57=↳ | C57=finance_advisory | D57=Finance Advisory | E57=int_048  |  sort 48  |  used in 0 request(s)
+B58=↳ | C58=policy_advocacy | D58=Policy & Advocacy | E58=int_049  |  sort 49  |  used in 0 request(s)
+B59=↳ | C59=executive_coaching | D59=Executive Coaching | E59=int_050  |  sort 50  |  used in 0 request(s)
+B60=↳ | C60=friendship_social_connection | D60=Category group - 30 codes
+B61=↳ | C61=friendship | D61=Making Friends | E61=int_051  |  sort 1  |  used in 0 request(s)
+B62=↳ | C62=social_networking | D62=Social Networking | E62=int_052  |  sort 2  |  used in 1 request(s)
+B63=↳ | C63=conversation | D63=Good Conversation | E63=int_053  |  sort 3  |  used in 1 request(s)
+B64=↳ | C64=coffee_meetup | D64=Casual Coffee Chat | E64=int_054  |  sort 4  |  used in 0 request(s)
+B65=↳ | C65=lunch_buddies | D65=Lunch Buddies | E65=int_055  |  sort 5  |  used in 0 request(s)
+B66=↳ | C66=dinner_gatherings | D66=Dinner Gatherings | E66=int_056  |  sort 6  |  used in 0 request(s)
+B67=↳ | C67=activity_partner | D67=Activity Partner | E67=int_057  |  sort 7  |  used in 0 request(s)
+B68=↳ | C68=weekend_hangouts | D68=Weekend Hangouts | E68=int_058  |  sort 8  |  used in 0 request(s)
+B69=↳ | C69=city_exploration | D69=City Exploration | E69=int_059  |  sort 9  |  used in 0 request(s)
+B70=↳ | C70=hiking | D70=Hiking Buddy | E70=int_060  |  sort 10  |  used in 1 request(s)
+B71=↳ | C71=running_club | D71=Running Club | E71=int_061  |  sort 11  |  used in 0 request(s)
+B72=↳ | C72=fitness_buddy | D72=Workout / Gym Buddy | E72=int_062  |  sort 12  |  used in 0 request(s)
+B73=↳ | C73=board_games | D73=Board Game Nights | E73=int_063  |  sort 13  |  used in 1 request(s)
+B74=↳ | C74=video_gaming | D74=Video Gaming | E74=int_064  |  sort 14  |  used in 0 request(s)
+B75=↳ | C75=book_club | D75=Book Discussion | E75=int_065  |  sort 15  |  used in 0 request(s)
+B76=↳ | C76=movie_outings | D76=Film & Cinema | E76=int_066  |  sort 16  |  used in 0 request(s)
+B77=↳ | C77=outdoor_activities | D77=Outdoor Activities | E77=int_067  |  sort 17  |  used in 1 request(s)
+B78=↳ | C78=pet_playdates | D78=Pet Playdates | E78=int_068  |  sort 18  |  used in 0 request(s)
+B79=↳ | C79=parenting_community | D79=Parenting Connections | E79=int_069  |  sort 19  |  used in 0 request(s)
+B80=↳ | C80=neighborhood_social | D80=Neighborhood Socializing | E80=int_070  |  sort 20  |  used in 0 request(s)
+B81=↳ | C81=museum_visits | D81=Art & Museums | E81=int_071  |  sort 21  |  used in 0 request(s)
+B82=↳ | C82=concert_buddies | D82=Music & Concerts | E82=int_072  |  sort 22  |  used in 0 request(s)
+B83=↳ | C83=cooking_sharing | D83=Cooking & Foodies | E83=int_073  |  sort 23  |  used in 0 request(s)
+B84=↳ | C84=cultural_exchange | D84=Cultural Exchange | E84=int_074  |  sort 24  |  used in 0 request(s)
+B85=↳ | C85=creative_writing | D85=Creative Writing Club | E85=int_075  |  sort 25  |  used in 0 request(s)
+B86=↳ | C86=travel_buddies | D86=Travel Companions | E86=int_076  |  sort 26  |  used in 0 request(s)
+B87=↳ | C87=meditation_circle | D87=Mindfulness & Meditation | E87=int_077  |  sort 27  |  used in 0 request(s)
+B88=↳ | C88=cycling_club | D88=Cycling Partner | E88=int_078  |  sort 28  |  used in 0 request(s)
+B89=↳ | C89=sports_viewing | D89=Live Sports Viewing | E89=int_079  |  sort 29  |  used in 0 request(s)
+B90=↳ | C90=diy_projects | D90=Makers & DIY Enthusiasts | E90=int_080  |  sort 30  |  used in 0 request(s)
+B91=↳ | C91=learning_skill_development | D91=Category group - 10 codes
+B92=↳ | C92=career_guidance | D92=Career Guidance | E92=int_081  |  sort 1  |  used in 1 request(s)
+B93=↳ | C93=language_exchange | D93=Language Exchange | E93=int_082  |  sort 2  |  used in 0 request(s)
+B94=↳ | C94=study_buddy | D94=Study Partner | E94=int_083  |  sort 3  |  used in 0 request(s)
+B95=↳ | C95=upskilling | D95=Professional Upskilling | E95=int_084  |  sort 4  |  used in 0 request(s)
+B96=↳ | C96=interview_prep | D96=Mock Interview Prep | E96=int_085  |  sort 5  |  used in 0 request(s)
+B97=↳ | C97=public_speaking_prep | D97=Toastmasters / Public Speaking | E97=int_086  |  sort 6  |  used in 0 request(s)
+B98=↳ | C98=finance_literacy | D98=Personal Finance Literacy | E98=int_087  |  sort 7  |  used in 0 request(s)
+B99=↳ | C99=coding_bootcamp | D99=Coding Bootcamp Support | E99=int_088  |  sort 8  |  used in 0 request(s)
+B100=↳ | C100=academic_peer_review | D100=Thesis & Peer Review | E100=int_089  |  sort 9  |  used in 0 request(s)
+B101=↳ | C101=exam_prep | D101=Certifications & Exam Prep | E101=int_090  |  sort 10  |  used in 0 request(s)
+B102=↳ | C102=hobbies_lifestyle_activities | D102=Category group - 10 codes
+B103=↳ | C103=photography | D103=Photography | E103=int_091  |  sort 1  |  used in 0 request(s)
+B104=↳ | C104=gardening | D104=Urban Gardening & Plants | E104=int_092  |  sort 2  |  used in 0 request(s)
+B105=↳ | C105=culinary_arts | D105=Baking & Cooking Techniques | E105=int_093  |  sort 3  |  used in 0 request(s)
+B106=↳ | C106=music_jamming | D106=Musicians & Jam Sessions | E106=int_094  |  sort 4  |  used in 0 request(s)
+B107=↳ | C107=visual_arts | D107=Sketching & Painting | E107=int_095  |  sort 5  |  used in 0 request(s)
+B108=↳ | C108=yoga_practice | D108=Yoga & Wellness | E108=int_096  |  sort 6  |  used in 0 request(s)
+B109=↳ | C109=astronomy | D109=Stargazing & Astronomy | E109=int_097  |  sort 7  |  used in 0 request(s)
+B110=↳ | C110=woodworking | D110=Woodworking & Carpentry | E110=int_098  |  sort 8  |  used in 0 request(s)
+B111=↳ | C111=chess | D111=Chess & Strategy Games | E111=int_099  |  sort 9  |  used in 0 request(s)
+B112=↳ | C112=scuba_diving | D112=Scuba Diving & Watersports | E112=int_100  |  sort 10  |  used in 0 request(s)
+B113=↳ | C113=community_volunteering | D113=Category group - 10 codes
+B114=↳ | C114=volunteering | D114=Community Service | E114=int_101  |  sort 1  |  used in 0 request(s)
+B115=↳ | C115=civic_engagement | D115=Civic Participation | E115=int_102  |  sort 2  |  used in 0 request(s)
+B116=↳ | C116=animal_rescue | D116=Animal Shelter Support | E116=int_103  |  sort 3  |  used in 0 request(s)
+B117=↳ | C117=environmental_action | D117=Cleanups & Conservation | E117=int_104  |  sort 4  |  used in 0 request(s)
+B118=↳ | C118=youth_mentoring | D118=Underrepresented Youth Mentoring | E118=int_105  |  sort 5  |  used in 0 request(s)
+B119=↳ | C119=elder_support | D119=Elderly Companion Care | E119=int_106  |  sort 6  |  used in 0 request(s)
+B120=↳ | C120=disaster_relief | D120=Disaster Response Logistics | E120=int_107  |  sort 7  |  used in 0 request(s)
+B121=↳ | C121=food_bank_aid | D121=Food Drive & Distribution | E121=int_108  |  sort 8  |  used in 0 request(s)
+B122=↳ | C122=nonprofit_support | D122=Nonprofit Support | E122=int_109  |  sort 9  |  used in 0 request(s)
+B123=↳ | C123=community_organizing | D123=Community Organizing | E123=int_110  |  sort 10  |  used in 0 request(s)
+A124=3.0 | B124=display_label | C124=VARCHAR(80)  |  required | D124=Name users see. | E124=Free format | F124=New: label shown in the picker
+B125=↳ | C125=Text shown in the app | D125=Example: Seek Mentorship | E125=All 110 labels are distinct (longest 32 chars). 6 labels do not match their code - see Open Items.
+A126=4.0 | B126=category | C126=VARCHAR(40)  |  required | D126=Main type of intent. | E126=5 allowed values | F126=New: category stored as a code
+B127=↳ | C127=professional_general_networking | D127=Category group. | E127=Seeded in 50 row(s).
+B128=↳ | C128=friendship_social_connection | D128=Category group. | E128=Seeded in 30 row(s).
+B129=↳ | C129=learning_skill_development | D129=Category group. | E129=Seeded in 10 row(s).
+B130=↳ | C130=hobbies_lifestyle_activities | D130=Category group. | E130=Seeded in 10 row(s).
+B131=↳ | C131=community_volunteering | D131=Category group. | E131=Seeded in 10 row(s).
+A132=5.0 | B132=status | C132=VARCHAR(20)  |  required | D132=Can users still pick it? | E132=2 allowed values
+B133=↳ | C133=active | D133=Users can pick it. | E133=Seeded in 110 row(s).
+B134=↳ | C134=inactive | D134=Hidden from the picker. | E134=Allowed, not seeded.
+A135=6.0 | B135=sort_order | C135=SMALLINT  |  optional | D135=Order in the picker. | E135=Free format | F135=New: picker order
+B136=↳ | C136=1, 2, 3 ... | D136=Example: 1 | E136=CHECK sort_order > 0. Restarts at 1 in each category (unique per category + sort_order).
+A137=7.0 | B137=created_at | C137=TIMESTAMPTZ  |  required | D137=When added. | E137=Free format | F137=New: audit field
+B138=↳ | C138=Date and time | D138=Example: 2026-11-05 10:00+05:30 | E138=Not supplied by the seed; default applies.
+A139=8.0 | B139=updated_at | C139=TIMESTAMPTZ  |  required | D139=Last change. | E139=Free format | F139=New: audit field
+B140=↳ | C140=Date and time | D140=Example: 2026-11-05 10:00+05:30 | E140=Set by trigger.
+A141=core.connection_requests   |   13 columns (4 with fixed values) | F141=Modified
+A142=1.0 | B142=id | C142=BIGINT identity  |  required | D142=Request ID. | E142=Free format | F142=Modified: seed request_id (req001) -> BIGINT identity like the other team tables
+B143=↳ | C143=1, 2, 3 ... | D143=Example: 1 | E143=Generated always. core.connections.created_from_request_id uses the same type.
+A144=2.0 | B144=sender_user_id | C144=UUID  |  required | D144=User who sends. | E144=Free format | F144=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B145=↳ | C145=FK -> core.users(user_id) ON DELETE RESTRICT | D145=Example: fcba728f-... | E145=CHECK sender_user_id <> recipient_user_id. Cannot send while either user has an active full block (trigger). INDEX on (sender_user_id, created_at).
+A146=3.0 | B146=recipient_user_id | C146=UUID  |  required | D146=User who receives. | E146=Free format | F146=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B147=↳ | C147=FK -> core.users(user_id) ON DELETE RESTRICT | D147=Example: 6be8fb9a-... | E147=Partial UNIQUE (sender_user_id, recipient_user_id) WHERE status = 'pending'. If the recipient already has a pending request to the sender, accept that one instead (trigger).
+A148=4.0 | B148=category | C148=VARCHAR(20)  |  required | D148=Kind of connection asked for. | E148=5 allowed values | F148=Modified: only the 5 canonical categories kept (other taxonomy labels not kept)
+B149=↳ | C149=collaboration | D149=Work on something together. | E149=Seeded in 3 row(s).
+B150=↳ | C150=colleague | D150=Current or former colleagues / alumni. | E150=Seeded in 2 row(s).
+B151=↳ | C151=friendship | D151=Social, non-work connection. | E151=Seeded in 5 row(s).
+B152=↳ | C152=mentorship | D152=Guidance from a more experienced person. | E152=Seeded in 2 row(s).
+B153=↳ | C153=networking | D153=General professional contact. | E153=Seeded in 3 row(s).
+A154=5.0 | B154=intent_code | C154=VARCHAR(40)  |  optional | D154=Exact intent behind the request. | E154=110 codes in 5 groups
+B155=↳ | C155=professional_general_networking | D155=Category group - 50 codes
+B156=↳ | C156=networking | D156=Professional Networking | E156=int_001  |  sort 1  |  used in 3 request(s)
+B157=↳ | C157=advisory | D157=Technical Advisory | E157=int_002  |  sort 2  |  used in 0 request(s)
+B158=↳ | C158=mentorship | D158=Seek Mentorship | E158=int_003  |  sort 3  |  used in 1 request(s)
+B159=↳ | C159=collaborating | D159=Open Source Collaboration | E159=int_004  |  sort 4  |  used in 1 request(s)
+B160=↳ | C160=co_founding | D160=Seek Co-Founder | E160=int_005  |  sort 5  |  used in 0 request(s)
+B161=↳ | C161=hiring | D161=Hiring Engineers | E161=int_006  |  sort 6  |  used in 0 request(s)
+B162=↳ | C162=mentoring | D162=Provide Mentorship | E162=int_007  |  sort 7  |  used in 0 request(s)
+B163=↳ | C163=speaking_events | D163=Conference & Event Speaking | E163=int_008  |  sort 8  |  used in 0 request(s)
+B164=↳ | C164=knowledge_sharing | D164=Knowledge Sharing | E164=int_009  |  sort 9  |  used in 1 request(s)
+B165=↳ | C165=job_seeking | D165=Exploring Opportunities | E165=int_010  |  sort 10  |  used in 0 request(s)
+B166=↳ | C166=career_growth | D166=Career Growth | E166=int_011  |  sort 11  |  used in 0 request(s)
+B167=↳ | C167=internships | D167=Internship Opportunities | E167=int_012  |  sort 12  |  used in 0 request(s)
+B168=↳ | C168=referrals | D168=Referrals & Recommendations | E168=int_013  |  sort 13  |  used in 0 request(s)
+B169=↳ | C169=recruiting | D169=Recruiting Talent | E169=int_014  |  sort 14  |  used in 0 request(s)
+B170=↳ | C170=freelancing | D170=Freelance Work | E170=int_015  |  sort 15  |  used in 0 request(s)
+B171=↳ | C171=consulting | D171=Consulting Engagements | E171=int_016  |  sort 16  |  used in 0 request(s)
+B172=↳ | C172=partnerships | D172=Business Partnerships | E172=int_017  |  sort 17  |  used in 0 request(s)
+B173=↳ | C173=startup_collaboration | D173=Startup Collaboration | E173=int_018  |  sort 18  |  used in 0 request(s)
+B174=↳ | C174=product_feedback | D174=Product Feedback | E174=int_019  |  sort 19  |  used in 0 request(s)
+B175=↳ | C175=product_testing | D175=Beta / Product Testing | E175=int_020  |  sort 20  |  used in 0 request(s)
+B176=↳ | C176=technical_discussion | D176=Technical Discussion | E176=int_021  |  sort 21  |  used in 0 request(s)
+B177=↳ | C177=code_review | D177=Code Review | E177=int_022  |  sort 22  |  used in 0 request(s)
+B178=↳ | C178=pair_programming | D178=Pair Programming | E178=int_023  |  sort 23  |  used in 0 request(s)
+B179=↳ | C179=project_collaboration | D179=Project Collaboration | E179=int_024  |  sort 24  |  used in 0 request(s)
+B180=↳ | C180=research_collaboration | D180=Research Collaboration | E180=int_025  |  sort 25  |  used in 0 request(s)
+B181=↳ | C181=data_science | D181=Data Science | E181=int_026  |  sort 26  |  used in 0 request(s)
+B182=↳ | C182=ai_ml | D182=AI & Machine Learning | E182=int_027  |  sort 27  |  used in 1 request(s)
+B183=↳ | C183=web_development | D183=Web Development | E183=int_028  |  sort 28  |  used in 0 request(s)
+B184=↳ | C184=mobile_development | D184=Mobile Development | E184=int_029  |  sort 29  |  used in 0 request(s)
+B185=↳ | C185=cloud_computing | D185=Cloud Computing | E185=int_030  |  sort 30  |  used in 1 request(s)
+B186=↳ | C186=cybersecurity | D186=Cybersecurity | E186=int_031  |  sort 31  |  used in 0 request(s)
+B187=↳ | C187=devops | D187=DevOps & Infrastructure | E187=int_032  |  sort 32  |  used in 0 request(s)
+B188=↳ | C188=open_source | D188=Open Source | E188=int_033  |  sort 33  |  used in 1 request(s)
+B189=↳ | C189=design_collaboration | D189=Design Collaboration | E189=int_034  |  sort 34  |  used in 0 request(s)
+B190=↳ | C190=content_creation | D190=Content Creation | E190=int_035  |  sort 35  |  used in 0 request(s)
+B191=↳ | C191=technical_writing | D191=Technical Writing | E191=int_036  |  sort 36  |  used in 0 request(s)
+B192=↳ | C192=speaking_opportunities | D192=Speaking Opportunities | E192=int_037  |  sort 37  |  used in 0 request(s)
+B193=↳ | C193=investor_relations | D193=Investor Relations | E193=int_038  |  sort 38  |  used in 0 request(s)
+B194=↳ | C194=fundraising | D194=Fundraising | E194=int_039  |  sort 39  |  used in 0 request(s)
+B195=↳ | C195=academic_research | D195=Academic Research | E195=int_040  |  sort 40  |  used in 0 request(s)
+B196=↳ | C196=industry_insights | D196=Industry Insights | E196=int_041  |  sort 41  |  used in 0 request(s)
+B197=↳ | C197=sales_partnerships | D197=Sales Partnerships | E197=int_042  |  sort 42  |  used in 0 request(s)
+B198=↳ | C198=marketing_collaboration | D198=Marketing Collaboration | E198=int_043  |  sort 43  |  used in 0 request(s)
+B199=↳ | C199=brand_building | D199=Brand Building | E199=int_044  |  sort 44  |  used in 0 request(s)
+B200=↳ | C200=product_management | D200=Product Management | E200=int_045  |  sort 45  |  used in 0 request(s)
+B201=↳ | C201=ux_research | D201=UX Research | E201=int_046  |  sort 46  |  used in 0 request(s)
+B202=↳ | C202=legal_advisory | D202=Legal Advisory | E202=int_047  |  sort 47  |  used in 0 request(s)
+B203=↳ | C203=finance_advisory | D203=Finance Advisory | E203=int_048  |  sort 48  |  used in 0 request(s)
+B204=↳ | C204=policy_advocacy | D204=Policy & Advocacy | E204=int_049  |  sort 49  |  used in 0 request(s)
+B205=↳ | C205=executive_coaching | D205=Executive Coaching | E205=int_050  |  sort 50  |  used in 0 request(s)
+B206=↳ | C206=friendship_social_connection | D206=Category group - 30 codes
+B207=↳ | C207=friendship | D207=Making Friends | E207=int_051  |  sort 1  |  used in 0 request(s)
+B208=↳ | C208=social_networking | D208=Social Networking | E208=int_052  |  sort 2  |  used in 1 request(s)
+B209=↳ | C209=conversation | D209=Good Conversation | E209=int_053  |  sort 3  |  used in 1 request(s)
+B210=↳ | C210=coffee_meetup | D210=Casual Coffee Chat | E210=int_054  |  sort 4  |  used in 0 request(s)
+B211=↳ | C211=lunch_buddies | D211=Lunch Buddies | E211=int_055  |  sort 5  |  used in 0 request(s)
+B212=↳ | C212=dinner_gatherings | D212=Dinner Gatherings | E212=int_056  |  sort 6  |  used in 0 request(s)
+B213=↳ | C213=activity_partner | D213=Activity Partner | E213=int_057  |  sort 7  |  used in 0 request(s)
+B214=↳ | C214=weekend_hangouts | D214=Weekend Hangouts | E214=int_058  |  sort 8  |  used in 0 request(s)
+B215=↳ | C215=city_exploration | D215=City Exploration | E215=int_059  |  sort 9  |  used in 0 request(s)
+B216=↳ | C216=hiking | D216=Hiking Buddy | E216=int_060  |  sort 10  |  used in 1 request(s)
+B217=↳ | C217=running_club | D217=Running Club | E217=int_061  |  sort 11  |  used in 0 request(s)
+B218=↳ | C218=fitness_buddy | D218=Workout / Gym Buddy | E218=int_062  |  sort 12  |  used in 0 request(s)
+B219=↳ | C219=board_games | D219=Board Game Nights | E219=int_063  |  sort 13  |  used in 1 request(s)
+B220=↳ | C220=video_gaming | D220=Video Gaming | E220=int_064  |  sort 14  |  used in 0 request(s)
+B221=↳ | C221=book_club | D221=Book Discussion | E221=int_065  |  sort 15  |  used in 0 request(s)
+B222=↳ | C222=movie_outings | D222=Film & Cinema | E222=int_066  |  sort 16  |  used in 0 request(s)
+B223=↳ | C223=outdoor_activities | D223=Outdoor Activities | E223=int_067  |  sort 17  |  used in 1 request(s)
+B224=↳ | C224=pet_playdates | D224=Pet Playdates | E224=int_068  |  sort 18  |  used in 0 request(s)
+B225=↳ | C225=parenting_community | D225=Parenting Connections | E225=int_069  |  sort 19  |  used in 0 request(s)
+B226=↳ | C226=neighborhood_social | D226=Neighborhood Socializing | E226=int_070  |  sort 20  |  used in 0 request(s)
+B227=↳ | C227=museum_visits | D227=Art & Museums | E227=int_071  |  sort 21  |  used in 0 request(s)
+B228=↳ | C228=concert_buddies | D228=Music & Concerts | E228=int_072  |  sort 22  |  used in 0 request(s)
+B229=↳ | C229=cooking_sharing | D229=Cooking & Foodies | E229=int_073  |  sort 23  |  used in 0 request(s)
+B230=↳ | C230=cultural_exchange | D230=Cultural Exchange | E230=int_074  |  sort 24  |  used in 0 request(s)
+B231=↳ | C231=creative_writing | D231=Creative Writing Club | E231=int_075  |  sort 25  |  used in 0 request(s)
+B232=↳ | C232=travel_buddies | D232=Travel Companions | E232=int_076  |  sort 26  |  used in 0 request(s)
+B233=↳ | C233=meditation_circle | D233=Mindfulness & Meditation | E233=int_077  |  sort 27  |  used in 0 request(s)
+B234=↳ | C234=cycling_club | D234=Cycling Partner | E234=int_078  |  sort 28  |  used in 0 request(s)
+B235=↳ | C235=sports_viewing | D235=Live Sports Viewing | E235=int_079  |  sort 29  |  used in 0 request(s)
+B236=↳ | C236=diy_projects | D236=Makers & DIY Enthusiasts | E236=int_080  |  sort 30  |  used in 0 request(s)
+B237=↳ | C237=learning_skill_development | D237=Category group - 10 codes
+B238=↳ | C238=career_guidance | D238=Career Guidance | E238=int_081  |  sort 1  |  used in 1 request(s)
+B239=↳ | C239=language_exchange | D239=Language Exchange | E239=int_082  |  sort 2  |  used in 0 request(s)
+B240=↳ | C240=study_buddy | D240=Study Partner | E240=int_083  |  sort 3  |  used in 0 request(s)
+B241=↳ | C241=upskilling | D241=Professional Upskilling | E241=int_084  |  sort 4  |  used in 0 request(s)
+B242=↳ | C242=interview_prep | D242=Mock Interview Prep | E242=int_085  |  sort 5  |  used in 0 request(s)
+B243=↳ | C243=public_speaking_prep | D243=Toastmasters / Public Speaking | E243=int_086  |  sort 6  |  used in 0 request(s)
+B244=↳ | C244=finance_literacy | D244=Personal Finance Literacy | E244=int_087  |  sort 7  |  used in 0 request(s)
+B245=↳ | C245=coding_bootcamp | D245=Coding Bootcamp Support | E245=int_088  |  sort 8  |  used in 0 request(s)
+B246=↳ | C246=academic_peer_review | D246=Thesis & Peer Review | E246=int_089  |  sort 9  |  used in 0 request(s)
+B247=↳ | C247=exam_prep | D247=Certifications & Exam Prep | E247=int_090  |  sort 10  |  used in 0 request(s)
+B248=↳ | C248=hobbies_lifestyle_activities | D248=Category group - 10 codes
+B249=↳ | C249=photography | D249=Photography | E249=int_091  |  sort 1  |  used in 0 request(s)
+B250=↳ | C250=gardening | D250=Urban Gardening & Plants | E250=int_092  |  sort 2  |  used in 0 request(s)
+B251=↳ | C251=culinary_arts | D251=Baking & Cooking Techniques | E251=int_093  |  sort 3  |  used in 0 request(s)
+B252=↳ | C252=music_jamming | D252=Musicians & Jam Sessions | E252=int_094  |  sort 4  |  used in 0 request(s)
+B253=↳ | C253=visual_arts | D253=Sketching & Painting | E253=int_095  |  sort 5  |  used in 0 request(s)
+B254=↳ | C254=yoga_practice | D254=Yoga & Wellness | E254=int_096  |  sort 6  |  used in 0 request(s)
+B255=↳ | C255=astronomy | D255=Stargazing & Astronomy | E255=int_097  |  sort 7  |  used in 0 request(s)
+B256=↳ | C256=woodworking | D256=Woodworking & Carpentry | E256=int_098  |  sort 8  |  used in 0 request(s)
+B257=↳ | C257=chess | D257=Chess & Strategy Games | E257=int_099  |  sort 9  |  used in 0 request(s)
+B258=↳ | C258=scuba_diving | D258=Scuba Diving & Watersports | E258=int_100  |  sort 10  |  used in 0 request(s)
+B259=↳ | C259=community_volunteering | D259=Category group - 10 codes
+B260=↳ | C260=volunteering | D260=Community Service | E260=int_101  |  sort 1  |  used in 0 request(s)
+B261=↳ | C261=civic_engagement | D261=Civic Participation | E261=int_102  |  sort 2  |  used in 0 request(s)
+B262=↳ | C262=animal_rescue | D262=Animal Shelter Support | E262=int_103  |  sort 3  |  used in 0 request(s)
+B263=↳ | C263=environmental_action | D263=Cleanups & Conservation | E263=int_104  |  sort 4  |  used in 0 request(s)
+B264=↳ | C264=youth_mentoring | D264=Underrepresented Youth Mentoring | E264=int_105  |  sort 5  |  used in 0 request(s)
+B265=↳ | C265=elder_support | D265=Elderly Companion Care | E265=int_106  |  sort 6  |  used in 0 request(s)
+B266=↳ | C266=disaster_relief | D266=Disaster Response Logistics | E266=int_107  |  sort 7  |  used in 0 request(s)
+B267=↳ | C267=food_bank_aid | D267=Food Drive & Distribution | E267=int_108  |  sort 8  |  used in 0 request(s)
+B268=↳ | C268=nonprofit_support | D268=Nonprofit Support | E268=int_109  |  sort 9  |  used in 0 request(s)
+B269=↳ | C269=community_organizing | D269=Community Organizing | E269=int_110  |  sort 10  |  used in 0 request(s)
+A270=6.0 | B270=source_context | C270=VARCHAR(30)  |  optional | D270=Where the sender found the recipient. | E270=5 allowed values | F270=Modified: replaces source_channel (recommendation -> suggestions; events, mutual_connections added)
+B271=↳ | C271=events | D271=Met at an event. | E271=Seeded in 3 row(s).
+B272=↳ | C272=mutual_connections | D272=Through shared connections. | E272=Seeded in 2 row(s).
+B273=↳ | C273=profile | D273=From the recipient profile. | E273=Seeded in 5 row(s).
+B274=↳ | C274=search | D274=From search results. | E274=Seeded in 2 row(s).
+B275=↳ | C275=suggestions | D275=From suggested people. | E275=Seeded in 3 row(s).
+A276=7.0 | B276=status | C276=VARCHAR(20)  |  required | D276=Request lifecycle. | E276=6 allowed values
+B277=↳ | C277=pending | D277=Waiting for the recipient. | E277=Seeded in 4 row(s).
+B278=↳ | C278=accepted | D278=Recipient accepted; a core.connections row is created. | E278=Seeded in 7 row(s).
+B279=↳ | C279=declined | D279=Recipient declined; cooldown_until is set. | E279=Seeded in 2 row(s).
+B280=↳ | C280=withdrawn | D280=Sender took the request back. | E280=Seeded in 1 row(s).
+B281=↳ | C281=cancelled | D281=Cancelled before an answer. | E281=Allowed, not seeded.
+B282=↳ | C282=expired | D282=No answer before expires_at. | E282=Seeded in 1 row(s).
+A283=8.0 | B283=reason_text | C283=VARCHAR(300)  |  optional | D283=Short note to the recipient. | E283=Free format | F283=Modified: length limit
+B284=↳ | C284=Free text, up to 300 characters | D284=Example: Saw your talk at the meetup. | E284=CHECK char_length <= 300. Longest seeded note: 73 chars.
+A285=9.0 | B285=idempotency_key | C285=VARCHAR(255)  |  optional | D285=Stops duplicates on retry. | E285=Free format
+B286=↳ | C286=Text key or NULL | D286=Example: idem_net_001 | E286=UNIQUE (sender_user_id, idempotency_key). 15 distinct seeded keys.
+A287=10.0 | B287=created_at | C287=TIMESTAMPTZ  |  required | D287=When sent. | E287=Free format
+B288=↳ | C288=Date and time | D288=Example: 2026-11-05 10:00+05:30
+A289=11.0 | B289=responded_at | C289=TIMESTAMPTZ  |  optional | D289=When accepted / declined / withdrawn / cancelled. | E289=Free format | F289=Modified: tied to status
+B290=↳ | C290=Date and time; NULL while pending | D290=Example: 2026-11-06 09:00+05:30 | E290=Filled exactly when status <> 'pending' (except expired); >= created_at.
+A291=12.0 | B291=expires_at | C291=TIMESTAMPTZ  |  required | D291=When a pending request expires. | E291=Free format | F291=Modified: default 30 days
+B292=↳ | C292=Date and time | D292=Example: 2026-12-05 10:00+05:30 | E292=CHECK expires_at > created_at. Index WHERE status = 'pending'. Seed: 14 rows use 30 days, req015 uses 7.
+A293=13.0 | B293=cooldown_until | C293=TIMESTAMPTZ  |  optional | D293=Sender cannot re-send to this recipient before this. | E293=Free format | F293=Modified: when it is set
+B294=↳ | C294=Date and time | D294=Example: 2026-12-06 09:00+05:30 | E294=Set when declined (seed: 31 days after responded_at); >= created_at.
+A295=core.blocks   |   10 columns (4 with fixed values) | F295=Modified
+A296=1.0 | B296=id | C296=BIGINT identity  |  required | D296=Block ID. | E296=Free format | F296=Modified: replaces PK (blocker, blocked, created_at) - simpler to link from reports
+B297=↳ | C297=1, 2, 3 ... | D297=Example: 1 | E297=Generated always.
+A298=2.0 | B298=blocker_user_id | C298=UUID  |  required | D298=User who blocks. | E298=Free format | F298=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B299=↳ | C299=FK -> core.users(user_id) ON DELETE RESTRICT | D299=Example: fcba728f-... | E299=CHECK blocker_user_id <> blocked_user_id.
+A300=3.0 | B300=blocked_user_id | C300=UUID  |  required | D300=User who is blocked. | E300=Free format | F300=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B301=↳ | C301=FK -> core.users(user_id) ON DELETE RESTRICT | D301=Example: 6be8fb9a-... | E301=Partial UNIQUE (blocker_user_id, blocked_user_id) WHERE removed_at IS NULL: one active block per pair. Index on blocked_user_id.
+A302=4.0 | B302=block_type | C302=VARCHAR(20)  |  required | D302=How strong the block is. | E302=4 allowed values
+B303=↳ | C303=full | D303=Blocks all contact and visibility. | E303=Seeded in 7 row(s).
+B304=↳ | C304=soft_block | D304=Quietly hides the user. | E304=Seeded in 2 row(s).
+B305=↳ | C305=mute | D305=Hides their activity. | E305=Seeded in 3 row(s).
+B306=↳ | C306=dms_only | D306=Blocks direct messages only. | E306=Seeded in 3 row(s).
+A307=5.0 | B307=reason_code | C307=VARCHAR(50)  |  optional | D307=Why the user blocked. | E307=15 allowed values | F307=Modified: named CHECK on the reason list (seeded codes shown)
+B308=↳ | C308=bullying | D308=Block reason seen in the seed. | E308=Seeded in 1 row(s).
+B309=↳ | C309=coordinated_spam | D309=Block reason seen in the seed. | E309=Seeded in 1 row(s). | F309=Flagged: overlap - see Values Not Kept
+B310=↳ | C310=fraudulent_activity | D310=Block reason seen in the seed. | E310=Seeded in 1 row(s). | F310=Flagged: overlap - see Values Not Kept
+B311=↳ | C311=harassment | D311=Block reason seen in the seed. | E311=Seeded in 1 row(s).
+B312=↳ | C312=hate_speech | D312=Block reason seen in the seed. | E312=Seeded in 1 row(s).
+B313=↳ | C313=impersonation | D313=Block reason seen in the seed. | E313=Seeded in 1 row(s).
+B314=↳ | C314=inappropriate_media | D314=Block reason seen in the seed. | E314=Seeded in 1 row(s).
+B315=↳ | C315=message_spam | D315=Block reason seen in the seed. | E315=Seeded in 1 row(s). | F315=Flagged: overlap - see Values Not Kept
+B316=↳ | C316=privacy_violation | D316=Block reason seen in the seed. | E316=Seeded in 1 row(s).
+B317=↳ | C317=repetitive_comments | D317=Block reason seen in the seed. | E317=Seeded in 1 row(s).
+B318=↳ | C318=scam_fraud | D318=Block reason seen in the seed. | E318=Seeded in 1 row(s). | F318=Flagged: overlap - see Values Not Kept
+B319=↳ | C319=spam | D319=Block reason seen in the seed. | E319=Seeded in 1 row(s). | F319=Flagged: overlap - see Values Not Kept
+B320=↳ | C320=stalking | D320=Block reason seen in the seed. | E320=Seeded in 1 row(s).
+B321=↳ | C321=threatening_behavior | D321=Block reason seen in the seed. | E321=Seeded in 1 row(s).
+B322=↳ | C322=unsolicited_dms | D322=Block reason seen in the seed. | E322=Seeded in 1 row(s).
+A323=6.0 | B323=source | C323=VARCHAR(20)  |  required | D323=Who created the block. | E323=2 allowed values
+B324=↳ | C324=user | D324=Blocked by the user. | E324=Seeded in 12 row(s).
+B325=↳ | C325=moderator | D325=Blocked by a moderator. | E325=Seeded in 3 row(s).
+A326=7.0 | B326=source_context | C326=VARCHAR(30)  |  optional | D326=Where the block was made. | E326=5 allowed values | F326=New: kept from the seed and the action list (not in the final dictionary) - confirm
+B327=↳ | C327=direct_message | D327=From a direct message. | E327=Seeded in 4 row(s).
+B328=↳ | C328=comments | D328=From comments. | E328=Seeded in 4 row(s).
+B329=↳ | C329=profile_page | D329=From a profile page. | E329=Seeded in 3 row(s).
+B330=↳ | C330=search_results | D330=From search results. | E330=Seeded in 1 row(s).
+B331=↳ | C331=group_chat | D331=From a group chat. | E331=Seeded in 3 row(s).
+A332=8.0 | B332=created_at | C332=TIMESTAMPTZ  |  required | D332=When blocked. | E332=Free format
+B333=↳ | C333=Date and time | D333=Example: 2026-11-05 10:00+05:30 | E333=Seed writes now() - INTERVAL values, so times change on every run.
+A334=9.0 | B334=expires_at | C334=TIMESTAMPTZ  |  optional | D334=End of a temporary block. | E334=Free format | F334=New: temporary blocks
+B335=↳ | C335=Date and time; NULL = until removed | D335=Example: 2026-12-05 10:00+05:30 | E335=CHECK expires_at > created_at.
+A336=10.0 | B336=removed_at | C336=TIMESTAMPTZ  |  optional | D336=When unblocked. | E336=Free format
+B337=↳ | C337=Date and time; NULL while active | D337=No example (NULL in seed) | E337=CHECK removed_at >= created_at. All 15 seeded blocks are active.
+A338=core.user_pseudonyms   |   8 columns (3 with fixed values) | F338=Modified
+A339=1.0 | B339=pseudonym_id | C339=UUID  |  required | D339=Pseudonym ID. | E339=Free format | F339=Modified: seed text ID (pd_001) -> UUID
+B340=↳ | C340=UUID | D340=Example: 3f2b9c1e-... | E340=Server generated.
+A341=2.0 | B341=user_id | C341=UUID  |  required | D341=Owner of the pseudonym. | E341=Free format | F341=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B342=↳ | C342=FK -> core.users(user_id) ON DELETE RESTRICT | D342=Example: fcba728f-... | E342=INDEX on (user_id, scope, status). Never exposed in public APIs or logs.
+A343=3.0 | B343=handle | C343=VARCHAR(100)  |  required | D343=Alias shown instead of the real name. | E343=Free format | F343=Modified: seed had two handles in one cell on 3 rows - now one row per handle
+B344=↳ | C344=Handle text | D344=Example: shadow_falcon | E344=UNIQUE (scope, handle), case / Unicode normalised. One handle per row.
+A345=4.0 | B345=scope | C345=VARCHAR(30)  |  required | D345=Where the alias is used. | E345=5 allowed values | F345=New: named CHECK
+B346=↳ | C346=public_networking | D346=Public networking alias. | E346=Seeded in 4 row(s).
+B347=↳ | C347=blind_recruiting | D347=Alias for blind recruiting. | E347=Seeded in 1 row(s).
+B348=↳ | C348=anonymous_feedback | D348=Alias for anonymous feedback. | E348=Seeded in 1 row(s).
+B349=↳ | C349=community_forum | D349=Alias in community forums. | E349=Seeded in 1 row(s).
+B350=↳ | C350=private_group | D350=Alias in private groups. | E350=Allowed, not seeded.
+A351=5.0 | B351=status | C351=VARCHAR(20)  |  required | D351=Alias lifecycle. | E351=4 allowed values
+B352=↳ | C352=active | D352=In use. | E352=Seeded in 7 row(s).
+B353=↳ | C353=rotated | D353=Replaced by a new handle. | E353=Allowed, not seeded.
+B354=↳ | C354=revoked | D354=Withdrawn; not to be reactivated. | E354=Allowed, not seeded.
+B355=↳ | C355=dormant | D355=Not in use. | E355=Allowed, not seeded.
+A356=6.0 | B356=is_default | C356=BOOLEAN  |  required | D356=Default alias for the scope. | E356=2 allowed values | F356=New: one active default per user and scope
+B357=↳ | C357=TRUE | D357=Default alias for the scope. | E357=Allowed, not seeded.
+B358=↳ | C358=FALSE | D358=Not the default. | E358=Allowed, not seeded.
+A359=7.0 | B359=created_at | C359=TIMESTAMPTZ  |  required | D359=When created. | E359=Free format
+B360=↳ | C360=Date and time | D360=Example: 2026-10-15 09:00+05:30
+A361=8.0 | B361=rotated_at | C361=TIMESTAMPTZ  |  optional | D361=When the alias was rotated. | E361=Free format | F361=Modified: TIMESTAMPTZ NULL, tied to status
+B362=↳ | C362=Date and time; NULL if never rotated | D362=Example: 2026-10-17 13:59+05:30 | E362=Required when status = rotated (seed pd_002 has a date but status active).
+A363=core.profile_media   |   12 columns (4 with fixed values) | F363=Modified
+A364=1.0 | B364=media_id | C364=UUID  |  required | D364=Stable media ID. | E364=Free format | F364=New: ID so a user can have several media (review fix)
+B365=↳ | C365=UUID | D365=Example: 9d41c7aa-... | E365=Generated by the server.
+A366=2.0 | B366=user_id | C366=UUID  |  required | D366=Owner of the media. | E366=Free format | F366=Modified: TEXT slug in seed -> UUID, FK -> core.users(user_id)
+B367=↳ | C367=FK -> core.users(user_id) ON DELETE RESTRICT | D367=Example: fcba728f-... | E367=INDEX on (user_id, lifecycle_status, sort_order).
+A368=3.0 | B368=storage_bucket | C368=VARCHAR(60)  |  required | D368=Bucket holding the file. | E368=2 allowed values
+B369=↳ | C369=user-profile-media-prod | D369=Normal private bucket. | E369=Seeded in 9 row(s).
+B370=↳ | C370=quarantine-profile-media | D370=Rejected / quarantined media. | E370=Seeded in 1 row(s).
+A371=4.0 | B371=object_key | C371=VARCHAR(255)  |  required | D371=Path of the file in the bucket. | E371=Free format | F371=Modified: opaque server-generated key (seed keys are readable file names)
+B372=↳ | C372=Opaque key, e.g. media/photos/<random>.jpg | D372=Example: media/photos/aarav_avatar.jpg | E372=Generated by the server; users never supply paths.
+A373=5.0 | B373=media_type | C373=VARCHAR(20)  |  required | D373=Kind of file. | E373=3 allowed values
+B374=↳ | C374=image | D374=Photo. | E374=Seeded in 6 row(s).
+B375=↳ | C375=video | D375=Video. | E375=Seeded in 2 row(s).
+B376=↳ | C376=audio | D376=Audio. | E376=Seeded in 2 row(s).
+A377=6.0 | B377=moderation_status | C377=VARCHAR(20)  |  required | D377=Review result. | E377=4 allowed values | F377=Modified: default pending
+B378=↳ | C378=pending | D378=Not reviewed yet. | E378=Seeded in 1 row(s).
+B379=↳ | C379=approved | D379=Reviewed and allowed. | E379=Seeded in 8 row(s).
+B380=↳ | C380=rejected | D380=Reviewed and refused. | E380=Seeded in 1 row(s).
+B381=↳ | C381=quarantined | D381=Held for review. | E381=Allowed, not seeded.
+A382=7.0 | B382=lifecycle_status | C382=VARCHAR(20)  |  required | D382=Storage lifecycle. | E382=3 allowed values | F382=Modified: lifecycle consistency checks
+B383=↳ | C383=active | D383=Live. | E383=Seeded in 9 row(s).
+B384=↳ | C384=deleted | D384=Soft-deleted; waits for purge. | E384=Seeded in 1 row(s).
+B385=↳ | C385=purged | D385=File removed from storage. | E385=Allowed, not seeded.
+A386=8.0 | B386=sort_order | C386=SMALLINT  |  required | D386=Order of media on the profile. | E386=Free format | F386=New: ordering (review fix)
+B387=↳ | C387=0, 1, 2 ... | D387=Example: 0 | E387=CHECK sort_order >= 0. Changed in one transaction.
+A388=9.0 | B388=created_at | C388=TIMESTAMPTZ  |  required | D388=When uploaded. | E388=Free format
+B389=↳ | C389=Date and time | D389=Example: 2026-11-05 10:00+05:30 | E389=Seed writes now() - INTERVAL values.
+A390=10.0 | B390=deleted_at | C390=TIMESTAMPTZ  |  optional | D390=When soft-deleted. | E390=Free format
+B391=↳ | C391=Date and time; NULL if not deleted | D391=No example (NULL in seed) | E391=Only the vikram_nair seed row has a value.
+A392=11.0 | B392=purge_after | C392=TIMESTAMPTZ  |  optional | D392=Earliest time the file may be purged. | E392=Free format
+B393=↳ | C393=Date and time; NULL if not scheduled | D393=No example (NULL in seed) | E393=>= deleted_at. Policy driven (seed: 30 days after deletion).
+A394=12.0 | B394=purged_at | C394=TIMESTAMPTZ  |  optional | D394=When the file was removed from storage. | E394=Free format | F394=New: purge tracking (review fix)
+B395=↳ | C395=Date and time; NULL until purged | D395=No example (NULL in seed) | E395=Set only after the object is verified deleted.
+
+SHEET: Values Not Kept [state=visible]
+A1=Values from the seed and base file that were not kept
+A2=Each idea with the reason. Bring back any of them with a real use case and approval.
+A4=# | B4=Table | C4=Column | D4=Seed / base value(s) | E4=Why not kept
+A5=1.0 | B5=core.connection_requests | C5=request_id | D5=req001 ... req015 (text) | E5=Replaced by id BIGINT identity; core.connections.created_from_request_id is BIGINT.
+A6=2.0 | B6=core.connection_requests | C6=category | D6=Other taxonomy labels (longer list, incl. dating / romance) | E6=Only the 5 canonical categories are stored; dating / romance removed.
+A7=3.0 | B7=core.connection_requests | C7=source_channel | D7=search, recommendation, profile | E7=Replaced by source_context (recommendation -> suggestions; events and mutual_connections added).
+A8=4.0 | B8=core.connection_requests | C8=mutual_connections_count, is_seen, legacy_id | D8=Base-file columns | E8=In neither the final dictionary nor the seed. Bring back only with a use case.
+A9=5.0 | B9=core.connection_intents | C9=user_id, priority_order, max_connections_per_week, visibility, expires_at, description, legacy_id | D9=Base-file columns (per-user intents) | E9=Intents are now one shared lookup table (PK intent_code), so per-user columns do not belong here.
+A10=6.0 | B10=core.blocks | C10=is_bidirectional, user_note, reported_to_moderation, block_id | D10=Base-file columns | E10=In neither the final dictionary nor the seed. Safety reasons open a report in safety.reports instead of a flag here.
+A11=7.0 | B11=core.blocks | C11=PK (blocker, blocked, created_at) | D11=Composite key | E11=Replaced by id BIGINT identity; simpler to link from reports.
+A12=8.0 | B12=core.user_pseudonyms | C12=pseudonym_id | D12=pd_001 ... pd_007 (text) | E12=Replaced by a UUID generated by the server.
+A13=9.0 | B13=core.user_pseudonyms | C13=handle | D13=Two handles in one cell (pd_001, pd_002, pd_007) | E13=Moved to one handle per row so UNIQUE (scope, handle) works.
+A14=10.0 | B14=core.user_pseudonyms | C14=pseudonym_code | D14=Base-file column | E14=Redundant with pseudonym_id.
+A15=11.0 | B15=All user columns | C15=user ids | D15=aarav_sharma, diya_patel ... (text slugs) | E15=Replaced by UUIDs from core.users. Do not fall back to a name slug if the user is missing.
+A16=12.0 | B16=core.profile_media | C16=object_key | D16=Readable names such as media/photos/aarav_avatar.jpg | E16=Keys are generated by the server and opaque; users never choose storage paths.
+
+SHEET: Relationships [state=visible]
+A1=Relationships (foreign keys)
+A2=User links point to core.users(user_id) (Aditya); other links go to the owner's tables.
+A4=Child table | B4=Column | C4=Parent table | D4=Parent column | E4=On delete | F4=Change
+A5=core.connection_requests | B5=sender_user_id | C5=core.users (Aditya) | D5=user_id | E5=RESTRICT | F5=Modified: TEXT -> UUID, users.user_id
+A6=core.connection_requests | B6=recipient_user_id | C6=core.users (Aditya) | D6=user_id | E6=RESTRICT | F6=Modified: TEXT -> UUID, users.user_id
+A7=core.connection_requests | B7=intent_code | C7=core.connection_intents | D7=intent_code | E7=RESTRICT | F7=New: intent must exist
+A8=core.blocks | B8=blocker_user_id | C8=core.users (Aditya) | D8=user_id | E8=RESTRICT | F8=Modified: TEXT -> UUID, users.user_id
+A9=core.blocks | B9=blocked_user_id | C9=core.users (Aditya) | D9=user_id | E9=RESTRICT | F9=Modified: TEXT -> UUID, users.user_id
+A10=core.user_pseudonyms | B10=user_id | C10=core.users (Aditya) | D10=user_id | E10=RESTRICT | F10=Modified: TEXT -> UUID, users.user_id
+A11=core.profile_media | B11=user_id | C11=core.users (Aditya) | D11=user_id | E11=RESTRICT | F11=Modified: TEXT -> UUID, users.user_id
+A12=core.connections (Mahera) | B12=created_from_request_id | C12=core.connection_requests | D12=id | E12=RESTRICT | F12=Added later - after this table exists (BIGINT)
+
+SHEET: Open Items [state=visible]
+A1=Open items
+A2=To settle with the tech lead / mentor.
+A4=# | B4=Area | C4=Item | D4=Owner | E4=Status
+A5=1.0 | B5=Question | C5=Block reasons: provide the approved 50-code list (9 groups). Merge overlapping seeded codes (spam / message_spam / coordinated_spam; scam_fraud / fraudulent_activity)? | D5=Prajwal + mentor | E5=Open
+A6=2.0 | B6=Question | C6=connection_intents: keep intent_id (int_001 ...) next to PK intent_code, or drop it as in the final dictionary? | D6=Prajwal + mentor | E6=Open
+A7=3.0 | B7=Question | C7=blocks.source_context (5 values) is in the seed and action list but not in the final dictionary: keep? | D7=Prajwal + mentor | E7=Open
+A8=4.0 | B8=Question | C8=Intents: 6 labels share no word with their code (job_seeking, movie_outings, culinary_arts, visual_arts, volunteering, environmental_action); overlapping pairs speaking_events / speaking_opportunities, hiring / recruiting, cooking_sharing / culinary_arts. Action list says 100 codes, seed has 110. | D8=Product / mentor | E8=Open
+A9=5.0 | B9=Question | C9=Cooldown after decline: 30 days or 1 month (seed uses 31 days)? Why does req015 expire after 7 days when the default is 30? | D9=Product / mentor | E9=Open
+A10=6.0 | B10=Question | C10=Block types: define what full, soft_block, mute and dms_only do on each screen. For source = moderator, who is blocker_user_id? | D10=Prajwal + Tejaswini | E10=Open
+A11=7.0 | B11=Process | C11=Update the seed SQL: UUID user IDs from core.users (no name-slug fallback), drop request_id and pd_NNN IDs, one handle per row, add media_id and sort_order, fix the three ON CONFLICT targets. | D11=Prajwal | E11=Open
+A12=8.0 | B12=Process | C12=Keep requests seeded before blocks: aarav_sharma has a full block on diya_patel and req001 is aarav to diya, so the block trigger would reject it in the other order. | D12=Prajwal | E12=Open
+A13=9.0 | B13=Process | C13=Use fixed timestamps in blocks and profile_media seed rows (now() - INTERVAL changes on every run). Check pending media (neha_joshi) is never served. | D13=Prajwal | E13=Open
+A14=10.0 | B14=Process | C14=Pseudonym -> user mapping must stay server-side: service roles only; never in public APIs, search indexes, analytics exports or logs. | D14=Prajwal | E14=Open
+A15=11.0 | B15=Dependency | C15=core.users.user_id type is UUID (reviewed dictionary) - confirm with the identity team. | D15=Prajwal + Aditya | E15=Open
+A16=12.0 | B16=Dependency | C16=Mahera's core.connections.created_from_request_id -> core.connection_requests(id) (BIGINT). | D16=Prajwal + Mahera | E16=Open
+A17=13.0 | B17=Dependency | C17=Safety reasons on a block also open a report in safety.reports: the reason list must match the report categories. | D17=Prajwal + Tejaswini | E17=Open
+
+SHEET: Seed Intents [state=visible]
+A1=Seed: core.connection_intents
+A2=110 seeded intents, in seed order (int_001 to int_110).
+A4=# | B4=Intent ID | C4=Category | D4=Intent code | E4=Display label | F4=Sort order | G4=Status | H4=Seed requests using it
+A5=1.0 | B5=int_001 | C5=professional_general_networking | D5=networking | E5=Professional Networking | F5=1.0 | G5=active | H5=3
+A6=2.0 | B6=int_002 | C6=professional_general_networking | D6=advisory | E6=Technical Advisory | F6=2.0 | G6=active | H6=0
+A7=3.0 | B7=int_003 | C7=professional_general_networking | D7=mentorship | E7=Seek Mentorship | F7=3.0 | G7=active | H7=1
+A8=4.0 | B8=int_004 | C8=professional_general_networking | D8=collaborating | E8=Open Source Collaboration | F8=4.0 | G8=active | H8=1
+A9=5.0 | B9=int_005 | C9=professional_general_networking | D9=co_founding | E9=Seek Co-Founder | F9=5.0 | G9=active | H9=0
+A10=6.0 | B10=int_006 | C10=professional_general_networking | D10=hiring | E10=Hiring Engineers | F10=6.0 | G10=active | H10=0
+A11=7.0 | B11=int_007 | C11=professional_general_networking | D11=mentoring | E11=Provide Mentorship | F11=7.0 | G11=active | H11=0
+A12=8.0 | B12=int_008 | C12=professional_general_networking | D12=speaking_events | E12=Conference & Event Speaking | F12=8.0 | G12=active | H12=0
+A13=9.0 | B13=int_009 | C13=professional_general_networking | D13=knowledge_sharing | E13=Knowledge Sharing | F13=9.0 | G13=active | H13=1
+A14=10.0 | B14=int_010 | C14=professional_general_networking | D14=job_seeking | E14=Exploring Opportunities | F14=10.0 | G14=active | H14=0
+A15=11.0 | B15=int_011 | C15=professional_general_networking | D15=career_growth | E15=Career Growth | F15=11.0 | G15=active | H15=0
+A16=12.0 | B16=int_012 | C16=professional_general_networking | D16=internships | E16=Internship Opportunities | F16=12.0 | G16=active | H16=0
+A17=13.0 | B17=int_013 | C17=professional_general_networking | D17=referrals | E17=Referrals & Recommendations | F17=13.0 | G17=active | H17=0
+A18=14.0 | B18=int_014 | C18=professional_general_networking | D18=recruiting | E18=Recruiting Talent | F18=14.0 | G18=active | H18=0
+A19=15.0 | B19=int_015 | C19=professional_general_networking | D19=freelancing | E19=Freelance Work | F19=15.0 | G19=active | H19=0
+A20=16.0 | B20=int_016 | C20=professional_general_networking | D20=consulting | E20=Consulting Engagements | F20=16.0 | G20=active | H20=0
+A21=17.0 | B21=int_017 | C21=professional_general_networking | D21=partnerships | E21=Business Partnerships | F21=17.0 | G21=active | H21=0
+A22=18.0 | B22=int_018 | C22=professional_general_networking | D22=startup_collaboration | E22=Startup Collaboration | F22=18.0 | G22=active | H22=0
+A23=19.0 | B23=int_019 | C23=professional_general_networking | D23=product_feedback | E23=Product Feedback | F23=19.0 | G23=active | H23=0
+A24=20.0 | B24=int_020 | C24=professional_general_networking | D24=product_testing | E24=Beta / Product Testing | F24=20.0 | G24=active | H24=0
+A25=21.0 | B25=int_021 | C25=professional_general_networking | D25=technical_discussion | E25=Technical Discussion | F25=21.0 | G25=active | H25=0
+A26=22.0 | B26=int_022 | C26=professional_general_networking | D26=code_review | E26=Code Review | F26=22.0 | G26=active | H26=0
+A27=23.0 | B27=int_023 | C27=professional_general_networking | D27=pair_programming | E27=Pair Programming | F27=23.0 | G27=active | H27=0
+A28=24.0 | B28=int_024 | C28=professional_general_networking | D28=project_collaboration | E28=Project Collaboration | F28=24.0 | G28=active | H28=0
+A29=25.0 | B29=int_025 | C29=professional_general_networking | D29=research_collaboration | E29=Research Collaboration | F29=25.0 | G29=active | H29=0
+A30=26.0 | B30=int_026 | C30=professional_general_networking | D30=data_science | E30=Data Science | F30=26.0 | G30=active | H30=0
+A31=27.0 | B31=int_027 | C31=professional_general_networking | D31=ai_ml | E31=AI & Machine Learning | F31=27.0 | G31=active | H31=1
+A32=28.0 | B32=int_028 | C32=professional_general_networking | D32=web_development | E32=Web Development | F32=28.0 | G32=active | H32=0
+A33=29.0 | B33=int_029 | C33=professional_general_networking | D33=mobile_development | E33=Mobile Development | F33=29.0 | G33=active | H33=0
+A34=30.0 | B34=int_030 | C34=professional_general_networking | D34=cloud_computing | E34=Cloud Computing | F34=30.0 | G34=active | H34=1
+A35=31.0 | B35=int_031 | C35=professional_general_networking | D35=cybersecurity | E35=Cybersecurity | F35=31.0 | G35=active | H35=0
+A36=32.0 | B36=int_032 | C36=professional_general_networking | D36=devops | E36=DevOps & Infrastructure | F36=32.0 | G36=active | H36=0
+A37=33.0 | B37=int_033 | C37=professional_general_networking | D37=open_source | E37=Open Source | F37=33.0 | G37=active | H37=1
+A38=34.0 | B38=int_034 | C38=professional_general_networking | D38=design_collaboration | E38=Design Collaboration | F38=34.0 | G38=active | H38=0
+A39=35.0 | B39=int_035 | C39=professional_general_networking | D39=content_creation | E39=Content Creation | F39=35.0 | G39=active | H39=0
+A40=36.0 | B40=int_036 | C40=professional_general_networking | D40=technical_writing | E40=Technical Writing | F40=36.0 | G40=active | H40=0
+A41=37.0 | B41=int_037 | C41=professional_general_networking | D41=speaking_opportunities | E41=Speaking Opportunities | F41=37.0 | G41=active | H41=0
+A42=38.0 | B42=int_038 | C42=professional_general_networking | D42=investor_relations | E42=Investor Relations | F42=38.0 | G42=active | H42=0
+A43=39.0 | B43=int_039 | C43=professional_general_networking | D43=fundraising | E43=Fundraising | F43=39.0 | G43=active | H43=0
+A44=40.0 | B44=int_040 | C44=professional_general_networking | D44=academic_research | E44=Academic Research | F44=40.0 | G44=active | H44=0
+A45=41.0 | B45=int_041 | C45=professional_general_networking | D45=industry_insights | E45=Industry Insights | F45=41.0 | G45=active | H45=0
+A46=42.0 | B46=int_042 | C46=professional_general_networking | D46=sales_partnerships | E46=Sales Partnerships | F46=42.0 | G46=active | H46=0
+A47=43.0 | B47=int_043 | C47=professional_general_networking | D47=marketing_collaboration | E47=Marketing Collaboration | F47=43.0 | G47=active | H47=0
+A48=44.0 | B48=int_044 | C48=professional_general_networking | D48=brand_building | E48=Brand Building | F48=44.0 | G48=active | H48=0
+A49=45.0 | B49=int_045 | C49=professional_general_networking | D49=product_management | E49=Product Management | F49=45.0 | G49=active | H49=0
+A50=46.0 | B50=int_046 | C50=professional_general_networking | D50=ux_research | E50=UX Research | F50=46.0 | G50=active | H50=0
+A51=47.0 | B51=int_047 | C51=professional_general_networking | D51=legal_advisory | E51=Legal Advisory | F51=47.0 | G51=active | H51=0
+A52=48.0 | B52=int_048 | C52=professional_general_networking | D52=finance_advisory | E52=Finance Advisory | F52=48.0 | G52=active | H52=0
+A53=49.0 | B53=int_049 | C53=professional_general_networking | D53=policy_advocacy | E53=Policy & Advocacy | F53=49.0 | G53=active | H53=0
+A54=50.0 | B54=int_050 | C54=professional_general_networking | D54=executive_coaching | E54=Executive Coaching | F54=50.0 | G54=active | H54=0
+A55=51.0 | B55=int_051 | C55=friendship_social_connection | D55=friendship | E55=Making Friends | F55=1.0 | G55=active | H55=0
+A56=52.0 | B56=int_052 | C56=friendship_social_connection | D56=social_networking | E56=Social Networking | F56=2.0 | G56=active | H56=1
+A57=53.0 | B57=int_053 | C57=friendship_social_connection | D57=conversation | E57=Good Conversation | F57=3.0 | G57=active | H57=1
+A58=54.0 | B58=int_054 | C58=friendship_social_connection | D58=coffee_meetup | E58=Casual Coffee Chat | F58=4.0 | G58=active | H58=0
+A59=55.0 | B59=int_055 | C59=friendship_social_connection | D59=lunch_buddies | E59=Lunch Buddies | F59=5.0 | G59=active | H59=0
+A60=56.0 | B60=int_056 | C60=friendship_social_connection | D60=dinner_gatherings | E60=Dinner Gatherings | F60=6.0 | G60=active | H60=0
+A61=57.0 | B61=int_057 | C61=friendship_social_connection | D61=activity_partner | E61=Activity Partner | F61=7.0 | G61=active | H61=0
+A62=58.0 | B62=int_058 | C62=friendship_social_connection | D62=weekend_hangouts | E62=Weekend Hangouts | F62=8.0 | G62=active | H62=0
+A63=59.0 | B63=int_059 | C63=friendship_social_connection | D63=city_exploration | E63=City Exploration | F63=9.0 | G63=active | H63=0
+A64=60.0 | B64=int_060 | C64=friendship_social_connection | D64=hiking | E64=Hiking Buddy | F64=10.0 | G64=active | H64=1
+A65=61.0 | B65=int_061 | C65=friendship_social_connection | D65=running_club | E65=Running Club | F65=11.0 | G65=active | H65=0
+A66=62.0 | B66=int_062 | C66=friendship_social_connection | D66=fitness_buddy | E66=Workout / Gym Buddy | F66=12.0 | G66=active | H66=0
+A67=63.0 | B67=int_063 | C67=friendship_social_connection | D67=board_games | E67=Board Game Nights | F67=13.0 | G67=active | H67=1
+A68=64.0 | B68=int_064 | C68=friendship_social_connection | D68=video_gaming | E68=Video Gaming | F68=14.0 | G68=active | H68=0
+A69=65.0 | B69=int_065 | C69=friendship_social_connection | D69=book_club | E69=Book Discussion | F69=15.0 | G69=active | H69=0
+A70=66.0 | B70=int_066 | C70=friendship_social_connection | D70=movie_outings | E70=Film & Cinema | F70=16.0 | G70=active | H70=0
+A71=67.0 | B71=int_067 | C71=friendship_social_connection | D71=outdoor_activities | E71=Outdoor Activities | F71=17.0 | G71=active | H71=1
+A72=68.0 | B72=int_068 | C72=friendship_social_connection | D72=pet_playdates | E72=Pet Playdates | F72=18.0 | G72=active | H72=0
+A73=69.0 | B73=int_069 | C73=friendship_social_connection | D73=parenting_community | E73=Parenting Connections | F73=19.0 | G73=active | H73=0
+A74=70.0 | B74=int_070 | C74=friendship_social_connection | D74=neighborhood_social | E74=Neighborhood Socializing | F74=20.0 | G74=active | H74=0
+A75=71.0 | B75=int_071 | C75=friendship_social_connection | D75=museum_visits | E75=Art & Museums | F75=21.0 | G75=active | H75=0
+A76=72.0 | B76=int_072 | C76=friendship_social_connection | D76=concert_buddies | E76=Music & Concerts | F76=22.0 | G76=active | H76=0
+A77=73.0 | B77=int_073 | C77=friendship_social_connection | D77=cooking_sharing | E77=Cooking & Foodies | F77=23.0 | G77=active | H77=0
+A78=74.0 | B78=int_074 | C78=friendship_social_connection | D78=cultural_exchange | E78=Cultural Exchange | F78=24.0 | G78=active | H78=0
+A79=75.0 | B79=int_075 | C79=friendship_social_connection | D79=creative_writing | E79=Creative Writing Club | F79=25.0 | G79=active | H79=0
+A80=76.0 | B80=int_076 | C80=friendship_social_connection | D80=travel_buddies | E80=Travel Companions | F80=26.0 | G80=active | H80=0
+A81=77.0 | B81=int_077 | C81=friendship_social_connection | D81=meditation_circle | E81=Mindfulness & Meditation | F81=27.0 | G81=active | H81=0
+A82=78.0 | B82=int_078 | C82=friendship_social_connection | D82=cycling_club | E82=Cycling Partner | F82=28.0 | G82=active | H82=0
+A83=79.0 | B83=int_079 | C83=friendship_social_connection | D83=sports_viewing | E83=Live Sports Viewing | F83=29.0 | G83=active | H83=0
+A84=80.0 | B84=int_080 | C84=friendship_social_connection | D84=diy_projects | E84=Makers & DIY Enthusiasts | F84=30.0 | G84=active | H84=0
+A85=81.0 | B85=int_081 | C85=learning_skill_development | D85=career_guidance | E85=Career Guidance | F85=1.0 | G85=active | H85=1
+A86=82.0 | B86=int_082 | C86=learning_skill_development | D86=language_exchange | E86=Language Exchange | F86=2.0 | G86=active | H86=0
+A87=83.0 | B87=int_083 | C87=learning_skill_development | D87=study_buddy | E87=Study Partner | F87=3.0 | G87=active | H87=0
+A88=84.0 | B88=int_084 | C88=learning_skill_development | D88=upskilling | E88=Professional Upskilling | F88=4.0 | G88=active | H88=0
+A89=85.0 | B89=int_085 | C89=learning_skill_development | D89=interview_prep | E89=Mock Interview Prep | F89=5.0 | G89=active | H89=0
+A90=86.0 | B90=int_086 | C90=learning_skill_development | D90=public_speaking_prep | E90=Toastmasters / Public Speaking | F90=6.0 | G90=active | H90=0
+A91=87.0 | B91=int_087 | C91=learning_skill_development | D91=finance_literacy | E91=Personal Finance Literacy | F91=7.0 | G91=active | H91=0
+A92=88.0 | B92=int_088 | C92=learning_skill_development | D92=coding_bootcamp | E92=Coding Bootcamp Support | F92=8.0 | G92=active | H92=0
+A93=89.0 | B93=int_089 | C93=learning_skill_development | D93=academic_peer_review | E93=Thesis & Peer Review | F93=9.0 | G93=active | H93=0
+A94=90.0 | B94=int_090 | C94=learning_skill_development | D94=exam_prep | E94=Certifications & Exam Prep | F94=10.0 | G94=active | H94=0
+A95=91.0 | B95=int_091 | C95=hobbies_lifestyle_activities | D95=photography | E95=Photography | F95=1.0 | G95=active | H95=0
+A96=92.0 | B96=int_092 | C96=hobbies_lifestyle_activities | D96=gardening | E96=Urban Gardening & Plants | F96=2.0 | G96=active | H96=0
+A97=93.0 | B97=int_093 | C97=hobbies_lifestyle_activities | D97=culinary_arts | E97=Baking & Cooking Techniques | F97=3.0 | G97=active | H97=0
+A98=94.0 | B98=int_094 | C98=hobbies_lifestyle_activities | D98=music_jamming | E98=Musicians & Jam Sessions | F98=4.0 | G98=active | H98=0
+A99=95.0 | B99=int_095 | C99=hobbies_lifestyle_activities | D99=visual_arts | E99=Sketching & Painting | F99=5.0 | G99=active | H99=0
+A100=96.0 | B100=int_096 | C100=hobbies_lifestyle_activities | D100=yoga_practice | E100=Yoga & Wellness | F100=6.0 | G100=active | H100=0
+A101=97.0 | B101=int_097 | C101=hobbies_lifestyle_activities | D101=astronomy | E101=Stargazing & Astronomy | F101=7.0 | G101=active | H101=0
+A102=98.0 | B102=int_098 | C102=hobbies_lifestyle_activities | D102=woodworking | E102=Woodworking & Carpentry | F102=8.0 | G102=active | H102=0
+A103=99.0 | B103=int_099 | C103=hobbies_lifestyle_activities | D103=chess | E103=Chess & Strategy Games | F103=9.0 | G103=active | H103=0
+A104=100.0 | B104=int_100 | C104=hobbies_lifestyle_activities | D104=scuba_diving | E104=Scuba Diving & Watersports | F104=10.0 | G104=active | H104=0
+A105=101.0 | B105=int_101 | C105=community_volunteering | D105=volunteering | E105=Community Service | F105=1.0 | G105=active | H105=0
+A106=102.0 | B106=int_102 | C106=community_volunteering | D106=civic_engagement | E106=Civic Participation | F106=2.0 | G106=active | H106=0
+A107=103.0 | B107=int_103 | C107=community_volunteering | D107=animal_rescue | E107=Animal Shelter Support | F107=3.0 | G107=active | H107=0
+A108=104.0 | B108=int_104 | C108=community_volunteering | D108=environmental_action | E108=Cleanups & Conservation | F108=4.0 | G108=active | H108=0
+A109=105.0 | B109=int_105 | C109=community_volunteering | D109=youth_mentoring | E109=Underrepresented Youth Mentoring | F109=5.0 | G109=active | H109=0
+A110=106.0 | B110=int_106 | C110=community_volunteering | D110=elder_support | E110=Elderly Companion Care | F110=6.0 | G110=active | H110=0
+A111=107.0 | B111=int_107 | C111=community_volunteering | D111=disaster_relief | E111=Disaster Response Logistics | F111=7.0 | G111=active | H111=0
+A112=108.0 | B112=int_108 | C112=community_volunteering | D112=food_bank_aid | E112=Food Drive & Distribution | F112=8.0 | G112=active | H112=0
+A113=109.0 | B113=int_109 | C113=community_volunteering | D113=nonprofit_support | E113=Nonprofit Support | F113=9.0 | G113=active | H113=0
+A114=110.0 | B114=int_110 | C114=community_volunteering | D114=community_organizing | E114=Community Organizing | F114=10.0 | G114=active | H114=0
+
+SHEET: Seed Requests [state=visible]
+A1=Seed: core.connection_requests
+A2=15 seeded requests; times as written in the SQL (+05:30). Columns O to R are live checks.
+A4=# | B4=Request ID | C4=Sender user ID | D4=Recipient user ID | E4=Status | F4=Category | G4=Intent code | H4=Source context | I4=Reason text | J4=Created at | K4=Responded at | L4=Expires at | M4=Cooldown until | N4=Idempotency key | O4=Expiry window (days) | P4=Response time (hours) | Q4=Intent code exists?
+A5=1.0 | B5=req001 | C5=aarav_sharma | D5=diya_patel | E5=accepted | F5=networking | G5=networking | H5=profile | I5=Fellow database engineer here — love your OSS work on distributed queues! | J5=46313.4270833333 | K5=46313.5208333333 | L5=46343.4270833333 | N5=idem_net_001 | O5=30 | P5=2.25 | Q5=Yes
+A6=2.0 | B6=req002 | C6=diya_patel | D6=meera_iyer | E6=pending | F6=mentorship | G6=mentorship | H6=suggestions | I6=Looking for guidance on transitioning from IC to engineering management. | J6=46314.8194444445 | L6=46344.8194444445 | N6=idem_men_001 | O6=30 | P6= | Q6=Yes
+A7=3.0 | B7=req003 | C7=kabir_rao | D7=neha_joshi | E7=accepted | F7=collaboration | G7=collaborating | H7=events | I7=Saw your talk on streaming architectures — keen to collaborate! | J7=46315.5833333333 | K7=46315.6770833333 | L7=46345.5833333333 | N7=idem_col_001 | O7=30 | P7=2.25 | Q7=Yes
+A8=4.0 | B8=req004 | C8=meera_iyer | D8=aarav_sharma | E8=pending | F8=colleague | G8=networking | H8=profile | I8=Alumni from same university — always wanted to reconnect professionally! | J8=46316.8819444445 | L8=46346.8819444445 | N8=idem_col_002 | O8=30 | P8= | Q8=Yes
+A9=5.0 | B9=req005 | C9=sana_khan | D9=dev_kapoor | E9=accepted | F9=networking | G9=cloud_computing | H9=mutual_connections | I9=Three mutual connections recommended we connect. | J9=46317.7291666667 | K9=46317.78125 | L9=46347.7291666667 | N9=idem_net_002 | O9=30 | P9=1.249999999 | Q9=Yes
+A10=6.0 | B10=req006 | C10=sana_khan | D10=neha_joshi | E10=declined | F10=friendship | G10=outdoor_activities | H10=profile | I10=Noticed you are into indie hiking trails — would love a trail buddy! | J10=46318.4722222222 | K10=46318.5416666667 | L10=46348.4722222222 | M10=46349.5416666667 | N10=idem_frnd_001 | O10=30 | P10=1.666666668 | Q10=Yes
+A11=7.0 | B11=req007 | C11=neha_joshi | D11=diya_patel | E11=accepted | F11=friendship | G11=social_networking | H11=events | I11=Really want to build a friendship here! | J11=46319.7013888889 | K11=46319.7569444445 | L11=46349.7013888889 | N11=idem_frnd_002 | O11=30 | P11=1.333333335 | Q11=Yes
+A12=8.0 | B12=req008 | C12=meera_iyer | D12=rohan_das | E12=withdrawn | F12=friendship | G12=conversation | H12=profile | I12=Fellow coffee enthusiast — let us try every café around! | J12=46320.3958333333 | K12=46320.4270833333 | L12=46350.3958333333 | N12=idem_frnd_003 | O12=30 | P12=0.75 | Q12=Yes
+A13=9.0 | B13=req009 | C13=aarav_sharma | D13=kabir_rao | E13=accepted | F13=friendship | G13=hiking | H13=suggestions | I13=Need a weekend hiking and bouldering buddy! | J13=46321.5416666667 | K13=46321.5972222222 | L13=46351.5416666667 | N13=idem_frnd_004 | O13=30 | P13=1.333333332 | Q13=Yes
+A14=10.0 | B14=req010 | C14=diya_patel | D14=sana_khan | E14=accepted | F14=friendship | G14=board_games | H14=search | I14=Board game night champion searching for a worthy rival! | J14=46322.3645833333 | K14=46322.4236111111 | L14=46352.3645833333 | N14=idem_frnd_005 | O14=30 | P14=1.416666667 | Q14=Yes
+A15=11.0 | B15=req011 | C15=kabir_rao | D15=meera_iyer | E15=pending | F15=collaboration | G15=open_source | H15=mutual_connections | I15=Working on an open-source distributed tracing library in Rust. | J15=46323.6354166667 | L15=46353.6354166667 | N15=idem_col_003 | O15=30 | P15= | Q15=Yes
+A16=12.0 | B16=req012 | C16=rohan_das | D16=neha_joshi | E16=accepted | F16=collaboration | G16=ai_ml | H16=profile | I16=Loved your article on LLM fine-tuning. Want to co-author a follow-up? | J16=46324.4791666667 | K16=46324.5416666667 | L16=46354.4791666667 | N16=idem_col_004 | O16=30 | P16=1.5 | Q16=Yes
+A17=13.0 | B17=req013 | C17=sana_khan | D17=aarav_sharma | E17=declined | F17=mentorship | G17=career_guidance | H17=suggestions | I17=Early-career dev hoping for a 30-min coffee chat. | J17=46325.4166666667 | K17=46325.4895833333 | L17=46355.4166666667 | M17=46356.4895833333 | N17=idem_men_002 | O17=30 | P17=1.749999998 | Q17=Yes
+A18=14.0 | B18=req014 | C18=neha_joshi | D18=kabir_rao | E18=pending | F18=colleague | G18=knowledge_sharing | H18=events | I18=Met briefly at PyCon — alumni network. | J18=46326.7638888889 | L18=46356.7638888889 | N18=idem_col_005 | O18=30 | P18= | Q18=Yes
+A19=15.0 | B19=req015 | C19=diya_patel | D19=dev_kapoor | E19=expired | F19=networking | G19=networking | H19=search | I19=Pub quiz team needs a pop-culture expert tonight! | J19=46316.7083333333 | L19=46323.7083333333 | N19=idem_net_003 | O19=7 | P19= | Q19=Yes
+
+SHEET: Seed Blocks [state=visible]
+A1=Seed: core.blocks
+A2=15 seeded blocks; created at is the relative expression written in the SQL. Last column is a live check.
+A4=# | B4=Blocker user ID | C4=Blocked user ID | D4=Block type | E4=Reason code | F4=Source | G4=Source context | H4=Created at (as in SQL) | I4=Removed at | J4=Requests between this pair (either way)
+A5=1.0 | B5=aarav_sharma | C5=diya_patel | D5=full | E5=spam | F5=user | G5=direct_message | H5=now() - INTERVAL '7 days' | J5=1
+A6=2.0 | B6=diya_patel | C6=kabir_rao | D6=full | E6=harassment | F6=user | G6=comments | H6=now() - INTERVAL '6 days' | J6=0
+A7=3.0 | B7=kabir_rao | C7=meera_iyer | D7=dms_only | E7=hate_speech | F7=user | G7=group_chat | H7=now() - INTERVAL '5 days' | J7=1
+A8=4.0 | B8=meera_iyer | C8=rohan_das | D8=mute | E8=impersonation | F8=user | G8=profile_page | H8=now() - INTERVAL '4 days' | J8=1
+A9=5.0 | B9=rohan_das | C9=sana_khan | D9=full | E9=scam_fraud | F9=user | G9=direct_message | H9=now() - INTERVAL '3 days' | J9=0
+A10=6.0 | B10=sana_khan | C10=ishaan_verma | D10=dms_only | E10=inappropriate_media | F10=user | G10=direct_message | H10=now() - INTERVAL '2 days' | J10=0
+A11=7.0 | B11=ishaan_verma | C11=neha_joshi | D11=soft_block | E11=unsolicited_dms | F11=user | G11=search_results | H11=now() - INTERVAL '36 hours' | J11=0
+A12=8.0 | B12=neha_joshi | C12=vikram_nair | D12=full | E12=stalking | F12=user | G12=profile_page | H12=now() - INTERVAL '24 hours' | J12=0
+A13=9.0 | B13=vikram_nair | C13=pooja_menon | D13=mute | E13=privacy_violation | F13=user | G13=comments | H13=now() - INTERVAL '18 hours' | J13=0
+A14=10.0 | B14=pooja_menon | C14=arjun_reddy | D14=full | E14=bullying | F14=moderator | G14=group_chat | H14=now() - INTERVAL '12 hours' | J14=0
+A15=11.0 | B15=arjun_reddy | C15=tara_singh | D15=full | E15=fraudulent_activity | F15=moderator | G15=profile_page | H15=now() - INTERVAL '8 hours' | J15=0
+A16=12.0 | B16=tara_singh | C16=zoya_ali | D16=full | E16=threatening_behavior | F16=moderator | G16=group_chat | H16=now() - INTERVAL '6 hours' | J16=0
+A17=13.0 | B17=zoya_ali | C17=dev_kapoor | D17=mute | E17=message_spam | F17=user | G17=comments | H17=now() - INTERVAL '4 hours' | J17=0
+A18=14.0 | B18=dev_kapoor | C18=nikhil_bose | D18=dms_only | E18=coordinated_spam | F18=user | G18=direct_message | H18=now() - INTERVAL '3 hours' | J18=0
+A19=15.0 | B19=nikhil_bose | C19=riya_gupta | D19=soft_block | E19=repetitive_comments | F19=user | G19=comments | H19=now() - INTERVAL '1 hour' | J19=0
+
+SHEET: Seed Pseudonyms [state=visible]
+A1=Seed: core.user_pseudonyms
+A2=7 seeded pseudonym rows. Handles in cell is a live check (more than 1 = comma-separated list).
+A4=# | B4=Pseudonym ID | C4=User ID | D4=Handle (as stored) | E4=Handles in cell | F4=Scope | G4=Status | H4=Is default | I4=Created at | J4=Rotated at
+A5=1.0 | B5=pd_001 | C5=aarav_sharma | D5=shadow_falcon, cipher_architect | E5=2 | F5=public_networking | G5=active | H5=TRUE | I5=46310.375
+A6=2.0 | B6=pd_002 | C6=diya_patel | D6=quantum_coder, stealth_kernel | E6=2 | F6=public_networking | G6=active | H6=TRUE | I6=46266.4166666667 | J6=46312.5826388889
+A7=3.0 | B7=pd_003 | C7=kabir_rao | D7=pixel_sage | E7=1 | F7=community_forum | G7=active | H7=TRUE | I7=46313.6979166667
+A8=4.0 | B8=pd_004 | C8=meera_iyer | D8=neural_aurora | E8=1 | F8=blind_recruiting | G8=active | H8=TRUE | I8=46314.5104166667
+A9=5.0 | B9=pd_005 | C9=rohan_das | D9=silent_voyager | E9=1 | F9=anonymous_feedback | G9=active | H9=TRUE | I9=46315.3541666667
+A10=6.0 | B10=pd_006 | C10=sana_khan | D10=cyber_nomad | E10=1 | F10=public_networking | G10=active | H10=TRUE | I10=46316.7083333333
+A11=7.0 | B11=pd_007 | C11=neha_joshi | D11=cosmic_phoenix, starlight_dev | E11=2 | F11=public_networking | G11=active | H11=TRUE | I11=46317.5555555556
+
+SHEET: Seed Media [state=visible]
+A1=Seed: core.profile_media
+A2=10 seeded media rows; dates are the relative expressions written in the SQL.
+A4=# | B4=User ID | C4=Storage bucket | D4=Object key | E4=Media type | F4=Moderation status | G4=Lifecycle status | H4=Created at (as in SQL) | I4=Deleted at | J4=Purge after
+A5=1.0 | B5=aarav_sharma | C5=user-profile-media-prod | D5=media/photos/aarav_avatar.jpg | E5=image | F5=approved | G5=active | H5=now() - INTERVAL '3 hours'
+A6=2.0 | B6=diya_patel | C6=user-profile-media-prod | D6=media/photos/diya_avatar.jpg | E6=image | F6=approved | G6=active | H6=now() - INTERVAL '2 hours'
+A7=3.0 | B7=kabir_rao | C7=user-profile-media-prod | D7=media/photos/kabir_avatar.jpg | E7=image | F7=approved | G7=active | H7=now() - INTERVAL '1 hour'
+A8=4.0 | B8=meera_iyer | C8=user-profile-media-prod | D8=media/photos/meera_avatar.jpg | E8=image | F8=approved | G8=active | H8=now() - INTERVAL '45 minutes'
+A9=5.0 | B9=rohan_das | C9=user-profile-media-prod | D9=media/videos/rohan_intro.mp4 | E9=video | F9=approved | G9=active | H9=now() - INTERVAL '30 minutes'
+A10=6.0 | B10=sana_khan | C10=user-profile-media-prod | D10=media/audio/sana_podcast.mp3 | E10=audio | F10=approved | G10=active | H10=now() - INTERVAL '20 minutes'
+A11=7.0 | B11=ishaan_verma | C11=user-profile-media-prod | D11=media/photos/ishaan_avatar.jpg | E11=image | F11=approved | G11=active | H11=now() - INTERVAL '15 minutes'
+A12=8.0 | B12=neha_joshi | C12=user-profile-media-prod | D12=media/audio/neha_greeting.mp3 | E12=audio | F12=pending | G12=active | H12=now() - INTERVAL '10 minutes'
+A13=9.0 | B13=vikram_nair | C13=quarantine-profile-media | D13=media/photos/vikram_selfie.jpg | E13=image | F13=rejected | G13=deleted | H13=now() - INTERVAL '5 days' | I13=now() - INTERVAL '4 days' | J13=now() + INTERVAL '26 days'
+A14=10.0 | B14=pooja_menon | C14=user-profile-media-prod | D14=media/videos/pooja_portfolio.mp4 | E14=video | F14=approved | G14=active | H14=now() - INTERVAL '5 minutes'

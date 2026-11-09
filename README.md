@@ -1,0 +1,55 @@
+# Student team database
+
+This repository is the migration source of truth for the team database. The seven migrations and two seed files are deployed to the linked Supabase project `internship` (`fivopskfqvgyyjzsvabx`).
+
+Current deployed scope:
+
+- 49 application tables across `core`, `safety`, `analytics`, and `audit`.
+- 11 interest categories, 60 subcategories, and 962 interests.
+- 100 profile prompts and 110 connection intents.
+- 219 approved safety category/subcategory pairs.
+- 38 notification categories and 41 connection-close reasons.
+- Eight fictional review profiles plus a synthetic connection and direct-message workflow.
+- RLS on every application table. `anon` and `authenticated` have no application-schema access; the separate backend uses the trusted `service_role` path.
+- A NOLOGIN `student_database_reviewer` role limited to sanitized views in the `review` schema.
+
+All review data is synthetic. Do not load real student, Aadhaar, PAN, phone, email, message, or moderation data into this project.
+
+## Team workflow
+
+The lead owns the deployed design. Teammates review the synthetic views and propose changes through GitHub. Never edit tables directly in the Supabase dashboard and never rewrite a deployed migration; add a new migration.
+
+```powershell
+cd C:\Users\Hp\Intern_DB\student-team-database
+$env:PATH = 'C:\Program Files\nodejs;' + $env:PATH
+
+# Rebuild deterministic catalog SQL after an approved workbook change
+npm.cmd run seed:generate
+
+# See pending changes without deploying them
+npx.cmd supabase db push --remote --include-seed --dry-run
+
+# Lead-only deployment after review
+npx.cmd supabase db push --remote --include-seed --yes
+
+# Server-side SQL checks
+npx.cmd supabase db lint --remote --level warning
+```
+
+The catalog generator asserts the exact workbook counts and stops if a source has drifted. These scripts verify the deployed contract and exercise the synthetic workflow in a rollback transaction:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-remote.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-synthetic.ps1
+```
+
+## Repository map
+
+- `supabase/migrations/` — ordered schema, constraints, routines, RLS, and grants.
+- `supabase/seed.sql` — generated reference catalogs from the reviewed workbooks.
+- `supabase/synthetic_review_data.sql` — idempotent fictional review fixtures.
+- `supabase/tests/schema_contract.sql` — table, catalog, and security assertions.
+- `scripts/generate-seed.mjs` — deterministic workbook-to-SQL generator.
+- `docs/review/` — source extraction, original analysis, inventories, and decision evidence.
+
+The original review documents remain as an audit trail. Where they describe proposals or blockers, the deployed migrations and this README record the lead's final decision.
