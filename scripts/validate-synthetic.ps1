@@ -6,13 +6,36 @@ $sourceLines = Get-Content -LiteralPath (Join-Path $repoRoot 'supabase\synthetic
 $body = ($sourceLines | Where-Object { $_ -notmatch '^\s*(begin|commit);\s*$' }) -join [Environment]::NewLine
 $assertion = @'
 do $$
+declare
+  r record;
+  v_rows bigint;
 begin
-  if (select count(*) from core.profiles where handle like 'demo_user_%') <> 50 then
-    raise exception 'Synthetic profile count mismatch';
+  if (select count(*) from core.users) <> 50 then
+    raise exception 'Aditya synthetic user count mismatch';
   end if;
-  if not exists (select 1 from core.messages where client_message_id = 'synthetic-message-001') then
-    raise exception 'Synthetic messaging workflow was not created';
+  if (select count(*) from core.user_contacts) <> 50
+     or (select count(*) from core.user_verifications) <> 50
+     or (select count(*) from core.user_otp_challenges) <> 50 then
+    raise exception 'Aditya identity child-table count mismatch';
   end if;
+  if (select count(distinct gender) from core.users) <> 10 then
+    raise exception 'Gender value coverage mismatch';
+  end if;
+  if (select count(*) from core.users where account_status = 'active') <> 15
+     or (select count(*) from core.users where account_status = 'suspended') <> 3
+     or (select count(*) from core.users where account_status = 'deactivated') <> 2 then
+    raise exception 'Account lifecycle scenario mismatch';
+  end if;
+  for r in
+    select schemaname, tablename from pg_catalog.pg_tables
+    where schemaname in ('core','safety','analytics','audit')
+      and not (schemaname = 'core' and tablename in (
+        'users','auth_identities','user_contacts','user_verifications',
+        'user_otp_challenges','user_consents','user_status_history'))
+  loop
+    execute format('select count(*) from %I.%I', r.schemaname, r.tablename) into v_rows;
+    if v_rows <> 0 then raise exception 'Non-Aditya table %.% contains % rows', r.schemaname, r.tablename, v_rows; end if;
+  end loop;
 end $$;
 '@
 [System.IO.File]::WriteAllText(

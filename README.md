@@ -1,6 +1,6 @@
 # Student team database
 
-This repository is the migration source of truth for the team database, linked to Supabase project `internship` (`fivopskfqvgyyjzsvabx`). The application database is intentionally empty while the lead and team discuss flows, constraints, and business rules.
+This repository is the migration source of truth for the team database, linked to Supabase project `internship` (`fivopskfqvgyyjzsvabx`). Only Aditya's identity module is populated for testing while the remaining module flows and rules are discussed.
 
 Current deployed scope:
 
@@ -10,7 +10,7 @@ Current deployed scope:
 - RLS on every application table. `anon` and `authenticated` have no application-schema access; the separate backend uses the trusted `service_role` path.
 - A NOLOGIN `student_database_reviewer` role limited to sanitized views in the `review` schema.
 
-All 49 application tables currently contain zero rows. Do not load reference, synthetic, or real data until the lead approves the corresponding flow and rules. Never load real Aadhaar, PAN, phone, email, message, or moderation data into this review project.
+Only Aditya's seven identity tables contain synthetic test data: 50 fictional users covering production-style onboarding, verification, consent, OTP, authentication, suspension, and deactivation states. Every other module remains empty. Never load real Aadhaar, PAN, phone, email, message, or moderation data into this review project.
 
 ## Team workflow
 
@@ -22,6 +22,9 @@ $env:PATH = 'C:\Program Files\nodejs;' + $env:PATH
 
 # Rebuild deterministic catalog SQL after an approved workbook change
 npm.cmd run seed:generate
+
+# Rebuild Aditya's deterministic 50-user identity fixture
+npm.cmd run seed:synthetic
 
 # See pending schema changes without deploying them
 npx.cmd supabase db push --remote --dry-run
@@ -44,7 +47,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-synth
 
 - `supabase/migrations/` — ordered schema, constraints, routines, RLS, and grants.
 - `supabase/seed.sql` — generated reference catalogs from the reviewed workbooks.
-- `supabase/synthetic_review_data.sql` — idempotent fictional review fixtures.
+- `supabase/synthetic_review_data.sql` — idempotent Aditya-only 50-user identity fixture.
 - `supabase/tests/schema_contract.sql` — table, catalog, and security assertions.
 - `scripts/generate-seed.mjs` — deterministic workbook-to-SQL generator.
 - `docs/review/` — source extraction, original analysis, inventories, and decision evidence.

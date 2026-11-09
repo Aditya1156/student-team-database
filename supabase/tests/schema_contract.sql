@@ -10,14 +10,9 @@ begin
     raise exception 'Expected 49 application tables, found %', v_count;
   end if;
 
-  if (select count(*) from core.interest_categories) <> 11 then raise exception 'Interest category count mismatch'; end if;
-  if (select count(*) from core.interest_subcategories) <> 60 then raise exception 'Interest subcategory count mismatch'; end if;
-  if (select count(*) from core.interests) <> 962 then raise exception 'Interest count mismatch'; end if;
-  if (select count(*) from core.prompt_catalogue) <> 100 then raise exception 'Prompt count mismatch'; end if;
-  if (select count(*) from core.connection_intents) <> 110 then raise exception 'Connection-intent count mismatch'; end if;
-  if (select count(*) from safety.report_category_subcategories) <> 219 then raise exception 'Safety taxonomy count mismatch'; end if;
-  if (select count(*) from core.notification_categories) <> 38 then raise exception 'Notification-category count mismatch'; end if;
-  if (select count(*) from core.connection_closed_reasons) <> 41 then raise exception 'Connection-close reason count mismatch'; end if;
+  if (select count(*) from core.users) <> 50 then raise exception 'Aditya user fixture count mismatch'; end if;
+  if (select count(*) from core.user_contacts) <> 50 then raise exception 'Aditya contact fixture count mismatch'; end if;
+  if (select count(*) from core.user_verifications) <> 50 then raise exception 'Aditya verification fixture count mismatch'; end if;
 
   select count(*) into v_count
   from pg_catalog.pg_tables
