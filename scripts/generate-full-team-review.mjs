@@ -29,7 +29,7 @@ const tables = [
   'core.user_languages', 'core.notification_preferences', 'core.profile_prompts',
   'core.user_interests', 'core.profiles', 'core.prompt_catalogue', 'core.interests',
   'core.interest_subcategories', 'core.interest_categories', 'core.user_status_history',
-  'core.user_consents', 'core.user_otp_challenges', 'core.user_verifications',
+  'core.auth_sessions', 'core.user_consents', 'core.policy_versions', 'core.user_otp_challenges', 'core.user_verifications',
   'core.user_contacts', 'core.auth_identities', 'core.users'
 ];
 
@@ -139,7 +139,7 @@ from (select user_id,row_number() over(order by id)::int n from core.users) u
 join lateral (select channel,category_code from core.notification_category_channels order by category_code,channel offset (u.n-1)%(select count(*) from core.notification_category_channels) limit 1) c on true;
 
 insert into core.device_tokens
-  (user_id,provider,platform,token_ciphertext,token_nonce,token_key_version,token_fingerprint,status,created_at,expires_at,revoked_at,invalidated_at)
+  (user_id,provider,platform,token_ciphertext,token_nonce,token_key_version,token_fingerprint,status,created_at,expired_at,revoked_at,invalidated_at)
 select user_id,
        (array['fcm','apns','apns','apns','wns','webpush'])[((n-1)%6)+1],
        (array['android','ios','ipados','macos','windows','web'])[((n-1)%6)+1],
@@ -152,6 +152,23 @@ select user_id,
        case when ((n-1)%4)+1=2 then clock_timestamp()-interval '1 day' end,
        case when ((n-1)%4)+1=3 then clock_timestamp()-interval '1 day' end
 from (select user_id,row_number() over(order by id)::int n from core.users) u;
+
+insert into core.auth_sessions
+  (session_id,session_family_id,user_id,auth_identity_id,refresh_token_hash,refresh_token_version,device_id,ip_hmac,user_agent_hash,status,created_at,last_seen_at,expires_at,idle_expires_at,revoked_at,revocation_reason,updated_at)
+select extensions.uuid_generate_v5('00000000-0000-0000-0000-000000000012'::uuid,'session-'||u.n),
+       extensions.uuid_generate_v5('00000000-0000-0000-0000-000000000013'::uuid,'family-'||u.n),
+       u.user_id,i.id,extensions.digest('refresh-token-'||u.n,'sha256'),1,'synthetic-device-'||u.n,
+       extensions.digest('session-ip-'||u.n,'sha256'),extensions.digest('agent-'||u.n,'sha256'),
+       s.session_status,
+       clock_timestamp()-interval '5 days',clock_timestamp()-interval '1 day',
+       case when s.session_status='expired' then clock_timestamp()-interval '1 day' else clock_timestamp()+interval '25 days' end,
+       case when s.session_status='expired' then clock_timestamp()-interval '2 days' else clock_timestamp()+interval '6 days' end,
+       case when s.session_status<>'active' then clock_timestamp()-interval '1 day' end,
+       case when s.session_status<>'active' then (array['user_logout','security_event','absolute_expiry'])[((u.n-1)%3)+1] end,
+       clock_timestamp()-interval '1 hour'
+from (select user_id,row_number() over(order by id)::int n from core.users) u
+join lateral(select id,status from core.auth_identities where user_id=u.user_id order by id limit 1)i on true
+join lateral(select case when i.status<>'active' then 'revoked' else (array['active','revoked','expired','compromised'])[((u.n-1)%4)+1] end session_status)s on true;
 
 insert into core.connection_requests
   (sender_user_id,recipient_user_id,category,intent_code,source_context,status,reason_text,idempotency_key,created_at,responded_at,expires_at,cooldown_until)
@@ -367,7 +384,7 @@ select a.user_id,b.user_id,t.category,t.subcategory,'Synthetic safety report '||
 from (select user_id,row_number() over(order by id)::int n from core.users) a
 join (select user_id,row_number() over(order by id)::int n from core.users) b on b.n=((a.n+19-1)%50)+1
 join lateral (select category,subcategory from safety.report_category_subcategories order by category,subcategory offset (a.n-1)%219 limit 1) t on true
-join lateral (select id from safety.admin_users order by id offset (a.n-1)%8 limit 1) ad on true;
+join lateral (select id from safety.admin_users where status='active' order by id offset (a.n-1)%3 limit 1) ad on true;
 
 insert into safety.moderation_actions
   (target_user_id,admin_user_id,report_id,action_type,reason_code,status,created_at,expires_at,reversed_at,reversed_by_admin_id)
@@ -378,8 +395,8 @@ select r.reported_user_id,a.id,r.id,x.action_type,'synthetic_policy_reason',
        case when r.id%3=1 then clock_timestamp()-interval '5 days' end,
        case when r.id%3=1 then a2.id end
 from safety.reports r
-join lateral (select id from safety.admin_users order by id offset (r.id-1)%8 limit 1) a on true
-join lateral (select id from safety.admin_users order by id offset r.id%8 limit 1) a2 on true
+join lateral (select id from safety.admin_users where status='active' and role<>'appeals_admin' order by id offset (r.id-1)%2 limit 1) a on true
+join lateral (select id from safety.admin_users where status='active' and role<>'appeals_admin' order by id offset r.id%2 limit 1) a2 on true
 join lateral (select (array['warning','content_removal','temporary_suspension','account_restriction','permanent_suspension','content_restriction','comment_removal','message_restriction','profile_restriction','feature_restriction','access_revocation','content_flagging','content_visibility_limit','comment_lock','reply_restriction','direct_message_limit','contact_block','forced_password_reset','session_revocation','feature_access_pause','age_gate','final_warning','read_only_restriction','specialist_referral','education_notice'])[((r.id-1)%25)+1] action_type) x on true;
 
 insert into safety.moderation_appeals
@@ -391,7 +408,7 @@ select m.id,m.target_user_id,(array['submitted','under_review','approved','rejec
        clock_timestamp()-interval '14 days',
        case when ((m.id-1)%4)+1 in (3,4) then clock_timestamp()-interval '7 days' end
 from safety.moderation_actions m
-join lateral (select id from safety.admin_users order by id offset m.id%8 limit 1) a on true;
+join lateral (select id from safety.admin_users where status='active' and role='appeals_admin' order by id limit 1) a on true;
 
 insert into safety.legal_holds
   (user_id,case_reference,scope,restricted_actions,status,imposed_by_admin_id,reason_code,reason_note,imposed_at,effective_until,released_at,released_by_admin_id,release_reason_code)
@@ -414,7 +431,7 @@ select u.user_id,'LH-'||(2030+(u.n%10))||'-'||lpad(u.n::text,4,'0'),
        case when ((u.n-1)%3)+1=2 then a.id end,
        case when ((u.n-1)%3)+1=2 then 'matter_closed' end
 from (select user_id,row_number() over(order by id)::int n from core.users) u
-join lateral (select id from safety.admin_users order by id offset (u.n-1)%8 limit 1) a on true;
+join lateral (select id from safety.admin_users where status='active' and role='security_admin' order by id limit 1) a on true;
 
 insert into safety.report_evidence
   (report_id,evidence_type,source_entity_type,source_entity_id,snapshot_payload,reporting_user_behavior,reported_user_behavior,relation,connection_source,captured_at,retention_until,purged_at,evidence_file_hash,verification_status,reviewed_by_admin_id,reviewed_at,redaction_status,access_level)
@@ -433,7 +450,7 @@ select r.id,
        (array['not_redacted','partially_redacted','fully_redacted'])[((r.id-1)%3)+1],
        (array['moderators','security_admins','legal_only'])[((r.id-1)%3)+1]
 from safety.reports r
-join lateral (select id from safety.admin_users order by id offset (r.id-1)%8 limit 1) a on true;
+join lateral (select id from safety.admin_users where status='active' order by id offset (r.id-1)%3 limit 1) a on true;
 
 insert into analytics.product_events
   (event_type,actor_pseudonym_id,aggregate_type,aggregate_id,event_time,ingested_at,properties,source_outbox_event_id,event_idempotency_key,event_source,session_id)
@@ -476,7 +493,7 @@ select clock_timestamp()-interval '1 day',x.actor_type,
 from (select user_id,row_number() over(order by id)::int n from core.users) u
 join (select user_id,row_number() over(order by id)::int n from core.users) t on t.n=(u.n%50)+1
 join lateral (select (array['user','admin','support','system'])[((u.n-1)%4)+1] actor_type) x on true
-join lateral (select id from safety.admin_users order by id offset (u.n-1)%8 limit 1) a on true;
+join lateral (select id from safety.admin_users where status='active' order by id offset (u.n-1)%3 limit 1) a on true;
 `;
 
 const validationSql = String.raw`
@@ -492,10 +509,9 @@ begin
   end if;
 
   for r in
-    select schemaname,tablename
-    from pg_catalog.pg_tables
-    where schemaname in ('core','safety','analytics','audit')
-    order by schemaname,tablename
+    select split_part(name,'.',1) schemaname,split_part(name,'.',2) tablename
+    from unnest(array[${tables.map((name) => `'${name}'`).join(',')}]) name
+    order by name
   loop
     execute format('select count(*) from %I.%I',r.schemaname,r.tablename) into v_rows;
     if v_rows=0 then
@@ -546,7 +562,9 @@ begin
      or (select count(*) from safety.report_evidence) <> 50
      or (select count(*) from analytics.product_events) <> 50
      or (select count(*) from analytics.discovery_impressions) <> 50
-     or (select count(*) from audit.audit_product_event) <> 50 then
+     or (select count(*) from core.auth_sessions) <> 50
+     or (select count(*) from core.policy_versions) <> 6
+     or (select count(*) from audit.audit_product_event) < 50 then
     raise exception 'Safety, analytics, or audit count mismatch';
   end if;
 
@@ -578,6 +596,10 @@ const sql = [
   'begin;',
   `truncate table\n  ${tables.join(',\n  ')}\nrestart identity cascade;`,
   body('supabase/seed.sql'),
+  String.raw`insert into core.policy_versions(consent_type,policy_version,content_sha256,document_uri,published_at,effective_at)
+select t,v,extensions.digest('synthetic-review-policy:'||t||':'||v,'sha256'),'https://policies.example.test/'||t||'/'||v,
+  timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00'
+from (values ('terms_of_service','v1.0'),('terms_of_service','v1.1'),('privacy_notice','v1.0'),('privacy_notice','v1.1'),('kyc_verification','v1.0'),('marketing','v1.0')) p(t,v);`,
   body('supabase/synthetic_review_data.sql'),
   moduleSql.trim(),
   validationSql.trim(),

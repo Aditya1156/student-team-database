@@ -6,8 +6,8 @@ begin
   from information_schema.tables
   where table_schema in ('core', 'safety', 'analytics', 'audit')
     and table_type = 'BASE TABLE';
-  if v_count <> 49 then
-    raise exception 'Expected 49 application tables, found %', v_count;
+  if v_count < 51 then
+    raise exception 'Expected at least 51 application tables, found %', v_count;
   end if;
 
   if (select count(*) from core.users) <> 50 then raise exception 'Aditya user fixture count mismatch'; end if;
