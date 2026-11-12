@@ -1,0 +1,56 @@
+name: Schema drift
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/catalog_manifest.sql'
+      - 'scripts/check-schema-drift.mjs'
+      - 'scripts/generate-team-workbook.mjs'
+      - 'docs/schema-catalog-approved.json'
+      - 'docs/Team_Database_Complete_Design.xlsx'
+      - '.github/workflows/schema-drift.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/catalog_manifest.sql'
+      - 'scripts/check-schema-drift.mjs'
+      - 'scripts/generate-team-workbook.mjs'
+      - 'docs/schema-catalog-approved.json'
+      - 'docs/Team_Database_Complete_Design.xlsx'
+      - '.github/workflows/schema-drift.yml'
+
+jobs:
+  clean-database-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - name: Apply every migration to a clean PostgreSQL database
+        run: supabase db start
+
+      - name: Regenerate workbook from all migrations
+        run: npm run docs:team
+
+      - name: Verify the approved workbook was committed
+        run: git diff --exit-code -- docs/Team_Database_Complete_Design.xlsx
+
+      - name: Compare clean PostgreSQL catalog with approved metadata
+        run: npm run schema:drift
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

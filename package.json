@@ -7,6 +7,13 @@
     "seed:generate": "node scripts/generate-seed.mjs",
     "seed:synthetic": "node scripts/generate-synthetic-users.mjs",
     "seed:team": "node scripts/generate-full-team-review.mjs",
+    "docs:aditya": "node scripts/generate-aditya-workbook.mjs",
+    "docs:team": "node scripts/generate-team-workbook.mjs",
+    "docs:supporting": "node scripts/generate-supporting-tables-workbook.mjs",
+    "schema:drift": "node scripts/check-schema-drift.mjs",
+    "schema:drift:remote": "node scripts/check-schema-drift.mjs --remote",
+    "schema:approve:remote": "node scripts/check-schema-drift.mjs --remote --write-approved",
+    "test:erasure": "powershell -ExecutionPolicy Bypass -File scripts/validate-account-erasure.ps1",
     "db:lint": "supabase db lint --remote --level warning",
     "test": "supabase db lint --remote --level warning"
   },
@@ -23,6 +30,7 @@
   },
   "homepage": "https://github.com/Aditya1156/student-team-database#readme",
   "devDependencies": {
+    "exceljs": "^4.4.0",
     "supabase": "^3.0.0"
   }
 }

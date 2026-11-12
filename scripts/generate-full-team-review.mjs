@@ -596,10 +596,17 @@ const sql = [
   'begin;',
   `truncate table\n  ${tables.join(',\n  ')}\nrestart identity cascade;`,
   body('supabase/seed.sql'),
-  String.raw`insert into core.policy_versions(consent_type,policy_version,content_sha256,document_uri,published_at,effective_at)
+  String.raw`insert into core.policy_versions(consent_type,policy_version,content_sha256,document_uri,published_at,effective_at,retired_at)
 select t,v,extensions.digest('synthetic-review-policy:'||t||':'||v,'sha256'),'https://policies.example.test/'||t||'/'||v,
-  timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00'
-from (values ('terms_of_service','v1.0'),('terms_of_service','v1.1'),('privacy_notice','v1.0'),('privacy_notice','v1.1'),('kyc_verification','v1.0'),('marketing','v1.0')) p(t,v);`,
+  published_at,effective_at,retired_at
+from (values
+  ('terms_of_service','v1.0',timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00',timestamptz '2026-11-09 14:27:40+00'),
+  ('terms_of_service','v1.1',timestamptz '2026-11-09 14:00:00+00',timestamptz '2026-11-09 14:27:40+00',null::timestamptz),
+  ('privacy_notice','v1.0',timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00',timestamptz '2026-11-09 14:27:40+00'),
+  ('privacy_notice','v1.1',timestamptz '2026-11-09 14:00:00+00',timestamptz '2026-11-09 14:27:40+00',null::timestamptz),
+  ('kyc_verification','v1.0',timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00',null::timestamptz),
+  ('marketing','v1.0',timestamptz '2026-01-01 00:00:00+00',timestamptz '2026-01-15 00:00:00+00',null::timestamptz)
+) p(t,v,published_at,effective_at,retired_at);`,
   body('supabase/synthetic_review_data.sql'),
   moduleSql.trim(),
   validationSql.trim(),

@@ -1,0 +1,37 @@
+WHY WE CREATED THESE TWO SUPPORTING TABLES
+
+1. core.auth_sessions
+
+We use separate backend authentication, so our backend must manage login sessions instead of Supabase Auth.
+
+This table is used to:
+- Keep users logged in across multiple app visits.
+- Store only refresh-token hashes, never plaintext tokens.
+- Support token rotation and multiple devices.
+- Revoke one session or all sessions.
+- Block sessions after logout, recovery, suspension, deactivation, or deletion.
+- Detect possible old/stolen refresh-token reuse.
+
+Aditya owns the database design. The backend authentication developer operates it.
+
+
+2. core.policy_versions
+
+core.user_consents records a user's decision, but it must also identify the exact policy document involved.
+
+This table is used to:
+- Store Terms, Privacy, KYC, and Marketing policy versions.
+- Link every consent event to a real policy version.
+- Preserve old policy versions without changing them.
+- Store the document URL, content hash, and effective dates.
+- Prove which exact policy a user granted, declined, or withdrew.
+
+Aditya owns the database design. The approved policy content is supplied by the tech lead/product/legal-policy owner.
+
+
+SUMMARY
+
+core.auth_sessions answers: "Is this login session still valid?"
+core.policy_versions answers: "Which exact policy document did the user respond to?"
+
+These are supporting tables added for the later authentication-session and exact-policy-version requirements. They were not part of Aditya's original seven Excel tables.
